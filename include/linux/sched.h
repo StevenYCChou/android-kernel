@@ -1270,6 +1270,8 @@ struct task_struct {
 	unsigned int flags;	/* per process flags, defined below */
 	unsigned int ptrace;
 
+	int remaining_times_to_fail /*for OS hw2*/
+
 #ifdef CONFIG_SMP
 	struct llist_node wake_entry;
 	int on_cpu;
