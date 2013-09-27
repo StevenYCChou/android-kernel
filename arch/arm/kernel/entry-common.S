@@ -457,22 +457,22 @@ ENTRY(vector_swi)
 
 	/* code added from hw2  */
 
-	b1		should_fail
+	bl	should_fail
 
 	/* back up the return value into r10 */
-	mov		r10, r0
+	mov	r10, r0
 
 	/* restore caller-saved registers */
-	add		r0, sp, #S_R0 + S_OFF
+	add	r0, sp, #S_R0 + S_OFF
 	ldmia	r0, {r0 - r3}
 
 	/* check the return value stored in r10 */
-	cmp		r10, #0
-	beq		no_failure
+	cmp	r10, #0
+	beq	no_failure
 
 	/* fail the system call */
-	adr		lr,     BSYM(ret_fast_syscall)  @ return address
-	ldr		pc, =fail_syscall
+	adr	lr,     BSYM(ret_fast_syscall)  @ return address
+	ldr	pc, =fail_syscall
 
 no_failure:
 

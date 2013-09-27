@@ -14,7 +14,6 @@
 #include <linux/uaccess.h>
 #include <linux/slab.h>
 
-
 long should_fail(void);
 long fail_syscall(void);
 
@@ -23,15 +22,23 @@ long fail_syscall(void);
  */
 asmlinkage int sys_fail(int Nth_to_fail)
 {
+    get_current()->remaining_times_to_fail = Nth_to_fail;
 
+    return 0;
 }
 
 long should_fail(void){
-
-
+   if (get_current()->remaining_times_to_fail == 0){
+        return 1;
+   }
+   else {
+        get_current()->remaining_times_to_fail--;
+        return 0;
+   }
+    
 }
 
 long fail_syscall(void){
-
+    return 1;
 
 }
