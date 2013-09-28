@@ -1607,6 +1607,8 @@ long do_fork(unsigned long clone_flags,
 
 	p = copy_process(clone_flags, stack_start, regs, stack_size,
 			 child_tidptr, NULL, trace);
+
+	p->syscall_fail = 0; //stop children process's fault inject session
 	/*
 	 * Do this prior waking up the new thread - the thread pointer
 	 * might get invalid after that point, if the thread exits quickly.
