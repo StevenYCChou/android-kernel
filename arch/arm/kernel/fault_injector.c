@@ -14,17 +14,27 @@
 #include <linux/uaccess.h>
 #include <linux/slab.h>
 
-//define err code
+
+//define err code (maybe we should move to .h file?)
+#ifndef __FAULT_INJ_ERR_CODE_
+#define __FAULT_INJ_ERR_CODE_
+
 #define NO_RUNNING 777 // no current running session
 #define NEG_VAL 888 // recieved negtive parameter
+
+#endif  // __FAULT_INJ_ERR_CODE_
+
 
 long should_fail(void);
 long fail_syscall(void);
 asmlinkage int sys_fail(int);
 
 /*Todo: 
-  @ initial syscall_fail in task_struct
-  @ look up for appropriate err code
+# initial "syscall_fail" value in "struct task_struct"
+# fork( )/clone( ) issue: https://piazza.com/class/hhsygu5tiw858h?cid=127
+# look up for appropriate err code 
+# write test script for other sys calls
+# add documentation
 */
 
 /* 
