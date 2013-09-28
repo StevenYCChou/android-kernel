@@ -1,40 +1,10 @@
-#include <linux/kernel.h>
-#include <linux/export.h>
 #include <linux/errno.h>
+#include <linux/kernel.h>
 #include <linux/sched.h>
-#include <linux/mm.h>
-#include <linux/sem.h>
-#include <linux/msg.h>
-#include <linux/shm.h>
-#include <linux/stat.h>
-#include <linux/syscalls.h>
-#include <linux/mman.h>
-#include <linux/fs.h>
-#include <linux/file.h>
-#include <linux/ipc.h>
-#include <linux/uaccess.h>
-#include <linux/slab.h>
-
-
-//define err code (maybe we should move to .h file?)
-#ifndef __FAULT_INJ_ERR_CODE_
-#define __FAULT_INJ_ERR_CODE_
-
-#define NO_RUNNING 777 // no current running session
-#define NEG_VAL 888 // recieved negtive parameter
-
-#endif  // __FAULT_INJ_ERR_CODE_
-
 
 long should_fail(void);
 long fail_syscall(void);
 asmlinkage int sys_fail(int);
-
-/*Todo: 
-# fork( )/clone( ) issue: https://piazza.com/class/hhsygu5tiw858h?cid=127
-# write test script for other sys calls
-# add documentation
-*/
 
 /* 
  fail the Nth following system call
@@ -50,7 +20,7 @@ asmlinkage int sys_fail(int n_to_fail) {
 
       // stop the session if there's a current running session, else return error code
       if(get_current()->syscall_fail == 0) {
-        return NO_RUNNING;
+        return -EINVAL;
       }
       else {
         get_current()->syscall_fail = 0;
@@ -86,6 +56,5 @@ long should_fail(void) {
 }
 
 long fail_syscall(void) {
-    //Todo
     return -EINVAL;
 }
