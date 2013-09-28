@@ -59,9 +59,7 @@ asmlinkage int sys_fail(int n_to_fail) {
       }
 
     }
-    else {
-
-      // n_to_fail < 0, return err code
+    else { // n_to_fail < 0, return err code
       return NEG_VAL;
     }
 
@@ -71,15 +69,17 @@ asmlinkage int sys_fail(int n_to_fail) {
 
 long should_fail(void) {
 
-   if (get_current()->syscall_fail == 1){
-        (get_current()->syscall_fail)--;
-        return 1;
-   }
-   else {
-
-        (get_current()->syscall_fail)--;
-        return 0;
-   }
+  if (get_current()->syscall_fail == 1){
+    (get_current()->syscall_fail)--;
+    return 1;
+  }
+  else if(get_current()->syscall_fail == 0){
+    return 0;
+  }
+  else{
+    (get_current()->syscall_fail)--;
+      return 0;
+  }
     
 }
 
