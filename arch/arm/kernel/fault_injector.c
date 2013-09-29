@@ -1,3 +1,4 @@
+#include <linux/kernel.h>
 #include <linux/export.h>
 #include <linux/errno.h>
 #include <linux/sched.h>
@@ -31,10 +32,9 @@ asmlinkage int sys_fail(int);
  fail the Nth following system call
  */
 asmlinkage int sys_fail(int n_to_fail) {
-    
-    if(n_to_fail > 0) {
 
-      //just renew it
+    if(n_to_fail > 0) {
+      //set bookeeping # in task_struct
       get_current()->syscall_fail = n_to_fail;
     
     } 
@@ -50,8 +50,8 @@ asmlinkage int sys_fail(int n_to_fail) {
 
     }
     else {
-
       // n_to_fail < 0, return err code
+      // shouldn't get here, n_to_fail should be > 0
       return NEG_VAL;
     }
 
@@ -75,8 +75,6 @@ long should_fail(void) {
 
 
 long fail_syscall(void) {
-    
     //Todo
-    return 999;
-
+    return -EINVAL;
 }
