@@ -31,9 +31,7 @@ long fail_syscall(void);
 asmlinkage int sys_fail(int);
 
 /*Todo: 
-# initial "syscall_fail" value in "struct task_struct"
 # fork( )/clone( ) issue: https://piazza.com/class/hhsygu5tiw858h?cid=127
-# look up for appropriate err code 
 # write test script for other sys calls
 # add documentation
 */
@@ -62,29 +60,30 @@ asmlinkage int sys_fail(int n_to_fail) {
     else {
       // n_to_fail < 0, return err code
       // shouldn't get here, n_to_fail should be > 0
-      return NEG_VAL;
+      return -EINVAL;
     }
 
     return 0;
 }
 
-
 long should_fail(void) {
 
   if (get_current()->syscall_fail == 1){
+    // should fail!
     (get_current()->syscall_fail)--;
     return 1;
   }
   else if(get_current()->syscall_fail == 0){
+    // continue execution, no fail
     return 0;
   }
   else{
+    // continue execution, no fail, but subtract one from bookkeeping
     (get_current()->syscall_fail)--;
-      return 0;
+    return 0;
   }
     
 }
-
 
 long fail_syscall(void) {
     //Todo
