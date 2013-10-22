@@ -90,6 +90,7 @@ struct sched_param {
 #include <linux/latencytop.h>
 #include <linux/cred.h>
 #include <linux/llist.h>
+#include <linux/netlock.h>
 
 #include <asm/processor.h>
 
@@ -1255,6 +1256,10 @@ struct sched_rt_entity {
 #define RR_TIMESLICE		(100 * HZ / 1000)
 
 struct rcu_node;
+ 
+   
+
+
 
 enum perf_event_task_context {
 	perf_invalid_context = -1,
@@ -1269,6 +1274,8 @@ struct task_struct {
 	atomic_t usage;
 	unsigned int flags;	/* per process flags, defined below */
 	unsigned int ptrace;
+
+    netlock_t netlock;
 
 #ifdef CONFIG_SMP
 	struct llist_node wake_entry;

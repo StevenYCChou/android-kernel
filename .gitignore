@@ -84,3 +84,7 @@ GTAGS
 *.orig
 *~
 \#*#
+
+# os course file
+ramdisk.img
+test_kernel.sh

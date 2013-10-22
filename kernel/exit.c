@@ -53,6 +53,7 @@
 #include <linux/oom.h>
 #include <linux/writeback.h>
 #include <linux/shm.h>
+#include <linux/netlock.h> /* for netlock_release() */
 
 #include <asm/uaccess.h>
 #include <asm/unistd.h>
@@ -903,6 +904,8 @@ void do_exit(long code)
 {
 	struct task_struct *tsk = current;
 	int group_dead;
+
+    netlock_release();
 
 	profile_task_exit(tsk);
 
