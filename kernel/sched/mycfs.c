@@ -84,6 +84,7 @@ void init_mycfs_rq(struct mycfs_rq *mycfs_rq)
 }
 
 const struct sched_class mycfs_sched_class = {
+	.next				= &idle_sched_class,
 	.enqueue_task		= enqueue_task_mycfs,
 	.dequeue_task 		= dequeue_task_mycfs,
 	.check_preempt_curr = check_preempt_curr_mycfs,
