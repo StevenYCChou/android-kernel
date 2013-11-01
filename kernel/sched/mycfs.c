@@ -77,6 +77,12 @@ static unsigned int get_rr_interval_mycfs(struct rq *rq, struct task_struct *tas
 	return 0;
 }
 
+void init_mycfs_rq(struct mycfs_rq *mycfs_rq)
+{
+	mycfs_rq->tasks_timeline = RB_ROOT;
+	mycfs_rq->min_vruntime = (u64)(-(1LL << 20));
+}
+
 const struct sched_class mycfs_sched_class = {
 	.enqueue_task		= enqueue_task_mycfs,
 	.dequeue_task 		= dequeue_task_mycfs,
