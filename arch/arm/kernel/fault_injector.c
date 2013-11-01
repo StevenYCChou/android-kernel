@@ -10,7 +10,7 @@ asmlinkage int sys_fail(int);
  fail the Nth following system call
  */
 asmlinkage int sys_fail(int n_to_fail) {
-
+    printk("==================SYS_FAIL IS CALLED!!!!!!!!!!!!");
     if(n_to_fail > 0) {
       //set bookeeping # in task_struct
       get_current()->syscall_fail = n_to_fail;

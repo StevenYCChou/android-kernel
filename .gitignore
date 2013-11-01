@@ -84,3 +84,6 @@ GTAGS
 *.orig
 *~
 \#*#
+
+ramdisk.img
+test_kernel.sh
