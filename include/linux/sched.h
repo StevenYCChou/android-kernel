@@ -1235,7 +1235,7 @@ struct sched_entity {
 
 struct sched_mycfs_entity {
 	struct rb_node run_node;
-	//unsigned int on_rq;
+	unsigned int on_rq;
 
 	u64			exec_start;
 	//u64		sum_exec_runtime;
