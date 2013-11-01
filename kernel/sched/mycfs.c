@@ -3,6 +3,7 @@
  */
 
 #include "sched.h"
+#include <include/linux/rb-tree.h>
 
 /*
  * mycfs-task scheduling class.
@@ -25,11 +26,20 @@ static void check_preempt_curr_mycfs(struct rq *rq, struct task_struct *p, int f
 	resched_task(rq->mycfs);
 }
 
-static struct task_struct *pick_next_task_mycfs(struct rq *rq)
-{
+static struct sched_entity *pick_next_task_mycfs(struct rq *rq)
+{   
+    struct rb_node *left = rq->leftmost;
+    if (!left) {
+        return 0:
+    }
+
+    return rb_entry(left, struct  sched_entity, run_node);
+
+    /*
 	schedstat_inc(rq, sched_gomycfs);
 	calc_load_account_mycfs(rq);
 	return rq->mycfs;
+    */
 }
 
 static void enqueue_task_mycfs(struct rq *rq, struct task_struct *p, int flags)
