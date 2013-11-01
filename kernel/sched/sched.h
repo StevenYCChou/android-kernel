@@ -79,6 +79,7 @@ extern struct mutex sched_domains_mutex;
 
 struct cfs_rq;
 struct rt_rq;
+struct mycfs_rq;
 
 static LIST_HEAD(task_groups);
 
@@ -273,6 +274,20 @@ struct cfs_rq {
 #endif /* CONFIG_FAIR_GROUP_SCHED */
 };
 
+struct mycfs_rq {
+    unsigned long nr_running;
+    u64 min_vruntime;
+
+    struct rb_root tasks_timeline;
+    struct rb_node *rb_leftmost;
+
+    /*
+     * 'curr' points to currently running entity on this cfs_rq.
+     * It is set to NULL otherwise (i.e when none are currently running).
+     */
+    struct sched_entity *curr;
+};
+
 static inline int rt_bandwidth_enabled(void)
 {
 	return sysctl_sched_rt_runtime >= 0;
@@ -372,6 +387,7 @@ struct rq {
 
 	struct cfs_rq cfs;
 	struct rt_rq rt;
+	struct mycfs_rq mycfs;
 
 #ifdef CONFIG_FAIR_GROUP_SCHED
 	/* list of leaf cfs_rq on this cpu: */
