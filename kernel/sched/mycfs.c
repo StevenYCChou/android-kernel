@@ -8,7 +8,7 @@
 /*
  * mycfs-task scheduling class.
  *
- * (NOTE: these are not related to SCHED_mycfs tasks which are
+ * (NOTE: these are not related to SCHED_IDLE tasks which are
  *  handled in sched_fair.c)
  */
 
