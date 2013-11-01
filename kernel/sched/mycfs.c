@@ -80,6 +80,7 @@ static unsigned int get_rr_interval_mycfs(struct rq *rq, struct task_struct *tas
 void init_mycfs_rq(struct mycfs_rq *mycfs_rq)
 {
 	mycfs_rq->tasks_timeline = RB_ROOT;
+	mycfs_rq->nr_running = 0;
 	mycfs_rq->min_vruntime = (u64)(-(1LL << 20));
 }
 
