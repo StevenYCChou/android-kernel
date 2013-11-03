@@ -187,7 +187,26 @@ static void __enqueue_entity(struct mycfs_rq *mycfs_rq, struct sched_mycfs_entit
 static void
 place_entity(struct mycfs_rq *mycfs_rq, struct sched_mycfs_entity *my_se, int initial)
 {
-	
+	u64 vruntime = mycfs_rq->min_vruntime;
+
+	/* sleeps up to a single latency don't count. */
+	if (!initial) {
+		unsigned long thresh = mycfs_sysctl_sched_latency;
+
+		/*
+		 * Halve their sleep time's effect, to allow
+		 * for a gentler effect of sleepers:
+		 */
+		if (sched_feat(GENTLE_FAIR_SLEEPERS))
+			thresh >>= 1;
+
+		vruntime -= thresh;
+	}
+
+	/* ensure we never gain time by being placed backwards. */
+	vruntime = max_vruntime(my_se->vruntime, vruntime);
+
+	my_se->vruntime = vruntime;
 }
 
 static void 
