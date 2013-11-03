@@ -17,7 +17,7 @@
  * Minimal preemption granularity for CPU-bound tasks:
  * (default: 0.75 msec * (1 + ilog(ncpus)), units: nanoseconds)
  */
-unsigned int sysctl_sched_min_granularity = 750000ULL;
+unsigned int mycfs_sysctl_sched_min_granularity = 750000ULL;
 /*
  * Targeted preemption latency for CPU-bound tasks:
  * (default: 6ms * (1 + ilog(ncpus)), units: nanoseconds)
@@ -30,9 +30,9 @@ unsigned int sysctl_sched_min_granularity = 750000ULL;
  * (to see the precise effective timeslice length of your workload,
  *  run vmstat and monitor the context-switches (cs) field)
  */
-unsigned int sysctl_sched_latency = 6000000ULL;
+unsigned int mycfs_sysctl_sched_latency = 6000000ULL;
 /*
- * is kept at sysctl_sched_latency / sysctl_sched_min_granularity
+ * is kept at mycfs_sysctl_sched_latency / mycfs_sysctl_sched_min_granularity
  */
 static unsigned int sched_nr_latency = 8;
 
@@ -44,15 +44,19 @@ static int select_task_rq_mycfs(struct task_struct *p, int sd_flag, int flags)
 }
 #endif /* CONFIG_SMP */
 
+static inline struct task_struct *task_of(struct sched_mycfs_entity *my_se)
+{
+	return container_of(my_se, struct task_struct, my_se);
+}
 
-static struct sched_entity *pick_next_task_mycfs(struct rq *rq)
+static struct task_struct *pick_next_task_mycfs(struct rq *rq)
 {   
     struct rb_node *left = rq->mycfs.rb_leftmost;
     if (!left) {
         return 0;
     }
 
-    return rb_entry(left, struct  sched_entity, run_node);
+    return task_of(rb_entry(left, struct  sched_mycfs_entity, run_node));
 
     /*
 	schedstat_inc(rq, sched_gomycfs);
@@ -206,7 +210,7 @@ enqueue_mycfs_entity(struct mycfs_rq *mycfs_rq, struct sched_mycfs_entity *my_se
 
 static void enqueue_task_mycfs(struct rq *rq, struct task_struct *p, int flags)
 {
-	struct mycfs_rq *mycfs_rq = rq_of(mycfs_rq);
+	struct mycfs_rq *mycfs_rq = &(rq->mycfs);
 	struct sched_mycfs_entity *my_se = &p -> my_se;
 
 	enqueue_mycfs_entity(mycfs_rq, my_se, flags);
@@ -228,10 +232,10 @@ static void __dequeue_entity(struct mycfs_rq *mycfs_rq, struct sched_mycfs_entit
 }
 
 static void
-dequeue_mycfs_entity(struct mycfs_rq *mycfs_rq, struct sched_mycfs_entity *se, int flags)
+dequeue_mycfs_entity(struct mycfs_rq *mycfs_rq, struct sched_mycfs_entity *my_se, int flags)
 {
 	
-	update_curr(cfs_rq);
+	update_curr(mycfs_rq);
 
 	if (my_se != mycfs_rq->curr)
 		__dequeue_entity(mycfs_rq, my_se);
@@ -240,15 +244,15 @@ dequeue_mycfs_entity(struct mycfs_rq *mycfs_rq, struct sched_mycfs_entity *se, i
 	if (!(flags & DEQUEUE_SLEEP))
 		my_se->vruntime -= mycfs_rq->min_vruntime;
 
-	update_min_vruntime(cfs_rq);
+	update_min_vruntime(mycfs_rq);
 }
 
 static void dequeue_task_mycfs(struct rq *rq, struct task_struct *p, int flags)
 {
-	struct mycfs_rq *mycfs_rq;
+	struct mycfs_rq *mycfs_rq = &(rq->mycfs);
 	struct sched_mycfs_entity *my_se = &p->my_se;
 
-	dequeue_entity(mycfs_rq, my_se, flags);
+	dequeue_mycfs_entity(mycfs_rq, my_se, flags);
 	mycfs_rq->nr_running--;
 
 }
@@ -270,11 +274,11 @@ static void put_prev_task_mycfs(struct rq *rq, struct task_struct *prev)
  */
 static u64 __sched_period(unsigned long nr_running)
 {
-	u64 period = sysctl_sched_latency;
+	u64 period = mycfs_sysctl_sched_latency;
 	unsigned long nr_latency = sched_nr_latency;
 
 	if (unlikely(nr_running > nr_latency)) {
-		period = sysctl_sched_min_granularity;
+		period = mycfs_sysctl_sched_min_granularity;
 		period *= nr_running;
 	}
 
@@ -310,7 +314,7 @@ static u64 sched_slice(struct mycfs_rq *mycfs_rq, struct sched_mycfs_entity *my_
 	return slice;
 }
 
-struct sched_entity *__pick_first_entity(struct mycfs_rq *mycfs_rq)
+struct sched_mycfs_entity *__pick_first_mycfs_entity(struct mycfs_rq *mycfs_rq)
 {
 	struct rb_node *left = mycfs_rq->rb_leftmost;
 
@@ -343,10 +347,10 @@ static void check_preempt_tick(struct mycfs_rq *mycfs_rq, struct sched_mycfs_ent
 	 * narrow margin doesn't have to wait for a full slice.
 	 * This also mitigates buddy induced latencies under load.
 	 */
-	if (delta_exec < sysctl_sched_min_granularity)
+	if (delta_exec < mycfs_sysctl_sched_min_granularity)
 		return;
 
-	my_se = __pick_first_entity(mycfs_rq);
+	my_se = __pick_first_mycfs_entity(mycfs_rq);
 	delta = curr->vruntime - my_se->vruntime;
 
 	if (delta < 0)
@@ -367,7 +371,7 @@ entity_tick(struct mycfs_rq *mycfs_rq, struct sched_mycfs_entity *curr, int queu
 
 static void task_tick_mycfs(struct rq *rq, struct task_struct *curr, int queued)
 {
-	struct sched_entity *my_se = &curr->my_se;
+	struct sched_mycfs_entity *my_se = &curr->my_se;
 	struct mycfs_rq *mycfs_rq = mycfs_rq_of(my_se); //check whether we can directly use rq-> 
 
 	entity_tick(mycfs_rq, my_se, queued);
@@ -439,11 +443,11 @@ static void check_preempt_wakeup(struct rq *rq, struct task_struct *p, int wake_
 {
 	struct task_struct *curr = rq->curr;
 	struct sched_mycfs_entity *my_se = &curr->my_se, *pse = &p->my_se;
-	struct mycfs_rq *mycfs_rq = task_mycfs_rq(curr);
-	int scale = mycfs_rq->nr_running >= sched_nr_latency;
+	//struct mycfs_rq *mycfs_rq = task_mycfs_rq(curr);
+	//int scale = mycfs_rq->nr_running >= sched_nr_latency;
 	
 
-	if (unlikely(se == pse))
+	if (unlikely(my_se == pse))
 		return;
 
 	
