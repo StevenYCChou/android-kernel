@@ -43,19 +43,13 @@ static int select_task_rq_mycfs(struct task_struct *p, int sd_flag, int flags)
 	return task_cpu(p); /* mycfs tasks as never migrated */
 }
 #endif /* CONFIG_SMP */
-/*
- * mycfs tasks are unconditionally rescheduled:
- */
-static void check_preempt_curr_mycfs(struct rq *rq, struct task_struct *p, int flags)
-{
-	resched_task(rq->mycfs);
-}
+
 
 static struct sched_entity *pick_next_task_mycfs(struct rq *rq)
 {   
-    struct rb_node *left = rq->leftmost;
+    struct rb_node *left = rq->mycfs.rb_leftmost;
     if (!left) {
-        return 0:
+        return 0;
     }
 
     return rb_entry(left, struct  sched_entity, run_node);
@@ -70,6 +64,17 @@ static struct sched_entity *pick_next_task_mycfs(struct rq *rq)
 static inline struct rq *rq_of(struct mycfs_rq *mycfs_rq)
 {
 	return mycfs_rq->rq;
+}
+
+static inline struct mycfs_rq *task_mycfs_rq(struct task_struct *p)
+{
+	return p->my_se.mycfs_rq;
+}
+
+/* runqueue on which this entity is (to be) queued */
+static inline struct mycfs_rq *mycfs_rq_of(struct sched_mycfs_entity *my_se)
+{
+	return my_se->mycfs_rq;
 }
 
 static inline u64 max_vruntime(u64 min_vruntime, u64 vruntime)
@@ -175,8 +180,14 @@ static void __enqueue_entity(struct mycfs_rq *mycfs_rq, struct sched_mycfs_entit
 
 }
 
+static void
+place_entity(struct mycfs_rq *mycfs_rq, struct sched_mycfs_entity *my_se, int initial)
+{
+	
+}
+
 static void 
-enque_mycfs_entity(struct mycfs_rq *mycfs_rq, struct sched_mycfs_entity *my_se, int flags){
+enqueue_mycfs_entity(struct mycfs_rq *mycfs_rq, struct sched_mycfs_entity *my_se, int flags){
 	if (!(flags & ENQUEUE_WAKEUP) || (flags & ENQUEUE_WAKING))
 		my_se->vruntime += mycfs_rq->min_vruntime;
 
@@ -195,7 +206,7 @@ enque_mycfs_entity(struct mycfs_rq *mycfs_rq, struct sched_mycfs_entity *my_se, 
 
 static void enqueue_task_mycfs(struct rq *rq, struct task_struct *p, int flags)
 {
-	struct mycfs_rq *mycfs_rq = rq-> mycfs;
+	struct mycfs_rq *mycfs_rq = rq_of(mycfs_rq);
 	struct sched_mycfs_entity *my_se = &p -> my_se;
 
 	enqueue_mycfs_entity(mycfs_rq, my_se, flags);
@@ -284,7 +295,7 @@ static u64 sched_slice(struct mycfs_rq *mycfs_rq, struct sched_mycfs_entity *my_
 	// 	struct load_weight *load;
 	// 	struct load_weight lw;
 
-	// 	mycfs_rq = my_se->mycfs_rq;
+	// 	mycfs_rq = mycfs_rq_of(my_se);
 	// 	load = &cfs_rq->load;
 
 		// if (unlikely(!se->on_rq)) {
@@ -357,7 +368,7 @@ entity_tick(struct mycfs_rq *mycfs_rq, struct sched_mycfs_entity *curr, int queu
 static void task_tick_mycfs(struct rq *rq, struct task_struct *curr, int queued)
 {
 	struct sched_entity *my_se = &curr->my_se;
-	struct mycfs_rq *mycfs_rq = my_se->mycfs_rq; //check whether we can directly use rq-> 
+	struct mycfs_rq *mycfs_rq = mycfs_rq_of(my_se); //check whether we can directly use rq-> 
 
 	entity_tick(mycfs_rq, my_se, queued);
 }
@@ -397,7 +408,7 @@ static void set_next_entity(struct mycfs_rq *mycfs_rq, struct sched_mycfs_entity
 static void set_curr_task_mycfs(struct rq *rq)
 {
 	struct sched_mycfs_entity *my_se = &rq->curr->my_se;
-	struct mycfs_rq *mycfs_rq = my_se->mycfs_rq; //maybe can change to rq->mycfs_rq
+	struct mycfs_rq *mycfs_rq = mycfs_rq_of(my_se); //maybe can change to rq->mycfs_rq
 
 	set_next_entity(mycfs_rq, my_se);
 }
@@ -421,6 +432,47 @@ static void switched_to_mycfs(struct rq *rq, struct task_struct *p)
 		check_preempt_curr(rq, p, 0);
 }
 
+/*
+ * Preempt the current task with a newly woken task if needed:
+ */
+static void check_preempt_wakeup(struct rq *rq, struct task_struct *p, int wake_flags)
+{
+	struct task_struct *curr = rq->curr;
+	struct sched_mycfs_entity *my_se = &curr->my_se, *pse = &p->my_se;
+	struct mycfs_rq *mycfs_rq = task_mycfs_rq(curr);
+	int scale = mycfs_rq->nr_running >= sched_nr_latency;
+	
+
+	if (unlikely(se == pse))
+		return;
+
+	
+	if (test_tsk_need_resched(curr))
+		return;
+
+	//we can use do-while loop to replace original goto structure
+	//do{
+	/* Idle tasks are by definition preempted by non-idle tasks. */
+	if (unlikely(curr->policy == SCHED_IDLE) && likely(p->policy != SCHED_IDLE)) //Should we use this?
+		goto preempt;
+
+	/*
+	 * Batch and idle tasks do not preempt non-idle tasks (their preemption
+	 * is driven by the tick):
+	 */
+	if (unlikely(p->policy != SCHED_MYCFS))
+		return;
+
+	update_curr(mycfs_rq_of(my_se));
+	
+	return;
+	//}while(0);
+
+preempt:
+	resched_task(curr);
+	
+}
+
 static void prio_changed_mycfs(struct rq *rq, struct task_struct *p, int oldprio)
 {
 	
@@ -442,7 +494,7 @@ const struct sched_class mycfs_sched_class = {
 	.next				= &idle_sched_class,
 	.enqueue_task		= enqueue_task_mycfs,
 	.dequeue_task 		= dequeue_task_mycfs,
-	.check_preempt_curr = check_preempt_curr_mycfs,
+	.check_preempt_curr = check_preempt_wakeup,
 	.pick_next_task		= pick_next_task_mycfs,
 	.put_prev_task		= put_prev_task_mycfs,
 

@@ -1241,6 +1241,7 @@ struct sched_mycfs_entity {
 	//u64		sum_exec_runtime;
 	u64			vruntime;
 	//u64		prev_sum_exec_runtime;
+	struct mycfs_rq *mycfs_rq;
 };
 
 struct sched_rt_entity {
