@@ -276,12 +276,31 @@ static void dequeue_task_mycfs(struct rq *rq, struct task_struct *p, int flags)
 
 }
 
-
-
-static void put_prev_task_mycfs(struct rq *rq, struct task_struct *prev)
+static void put_prev_entity(struct mycfs_rq *mycfs_rq, struct sched_mycfs_entity *prev)
 {
+	/*
+	 * If still on the runqueue then deactivate_task()
+	 * was not called and update_curr() has to be done:
+	 */
+
+	if (prev->on_rq) {
+		update_curr(mycfs_rq);
+		/* Put 'current' back into the tree. */
+		__enqueue_entity(mycfs_rq, prev);
+	}
+	mycfs_rq->curr = NULL;
 }
 
+/*
+ * Account for a descheduled task:
+ */
+static void put_prev_task_mycfs(struct rq *rq, struct task_struct *prev)
+{
+	struct sched_mycfs_entity *my_se = &prev->my_se;
+	struct mycfs_rq *mycfs_rq = mycfs_rq_of(my_se);
+
+	put_prev_entity(mycfs_rq, my_se);
+}
 
 /*
  * The idea is to set a period in which each task runs once.
@@ -506,6 +525,44 @@ static unsigned int get_rr_interval_mycfs(struct rq *rq, struct task_struct *tas
 	return 0;
 }
 
+/*
+ * called on fork with the child task as argument from the parent's context
+ *  - child not yet on the tasklist
+ *  - preemption disabled
+ */
+static void task_fork_mycfs(struct task_struct *p)
+{
+	struct mycfs_rq *mycfs_rq;
+	struct sched_mycfs_entity *my_se = &p->my_se, *curr;
+	int this_cpu = smp_processor_id();
+	struct rq *rq = this_rq();
+	unsigned long flags;
+
+	raw_spin_lock_irqsave(&rq->lock, flags);
+
+	update_rq_clock(rq);
+
+	mycfs_rq = task_mycfs_rq(current);
+	curr = mycfs_rq->curr;
+
+	if (unlikely(task_cpu(p) != this_cpu)) {
+		rcu_read_lock();
+		__set_task_cpu(p, this_cpu);
+		rcu_read_unlock();
+	}
+
+	update_curr(mycfs_rq);
+
+	if (curr)
+		my_se->vruntime = curr->vruntime;
+
+	place_entity(mycfs_rq, my_se, 1);
+
+	my_se->vruntime -= mycfs_rq->min_vruntime;
+
+	raw_spin_unlock_irqrestore(&rq->lock, flags);
+}
+
 void init_mycfs_rq(struct mycfs_rq *mycfs_rq)
 {
 	mycfs_rq->tasks_timeline = RB_ROOT;
@@ -527,6 +584,7 @@ const struct sched_class mycfs_sched_class = {
 
 	.set_curr_task      = set_curr_task_mycfs,
 	.task_tick			= task_tick_mycfs,
+	.task_fork			= task_fork_mycfs,
 
 	.get_rr_interval	= get_rr_interval_mycfs,
 
