@@ -1238,9 +1238,9 @@ struct sched_mycfs_entity {
 	unsigned int on_rq;
 
 	u64			exec_start;
-	//u64		sum_exec_runtime;
 	u64			vruntime;
-	//u64		prev_sum_exec_runtime;
+	u64			sum_exec_runtime;
+	u64			prev_sum_exec_runtime;
 	struct mycfs_rq *mycfs_rq;
 };
 
