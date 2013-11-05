@@ -36,20 +36,111 @@ unsigned int mycfs_sysctl_sched_latency = 6000000ULL;
  */
 static unsigned int sched_nr_latency = 8;
 
+typedef int sd_flag_t;
+typedef int flag_t;
+typedef int prio_t;
 
-#ifdef CONFIG_SMP
-static int select_task_rq_mycfs(struct task_struct *p, int sd_flag, int flags)
+typedef struct mycfs_rq mycfs_rq_t;
+typedef struct sched_mycfs_entity sched_mycfs_entity_t;
+typedef struct rq rq_t;
+typedef struct task_struct task_struct_t;
+typedef struct sched_class sched_class_t;
+/*
+ function declaration
+*/
+
+/*Initialization */
+void init_mycfs_rq(mycfs_rq_t *mycfs_rq);
+
+/*tick related function*/
+sched_mycfs_entity_t* __pick_first_mycfs_entity(mycfs_rq_t*);
+static void entity_tick(mycfs_rq_t*, sched_mycfs_entity_t*, int);
+static void task_tick_mycfs(rq_t*, task_struct_t*, int);
+
+static void put_prev_entity(mycfs_rq_t*, sched_mycfs_entity_t*);
+static void put_prev_task_mycfs(rq_t*, task_struct_t*);
+
+static task_struct_t* pick_next_task_mycfs(rq_t*);
+static void set_next_entity(mycfs_rq_t*, sched_mycfs_entity_t*);
+static void set_curr_task_mycfs(rq_t*);
+
+static inline void update_stats_curr_start(mycfs_rq_t*, sched_mycfs_entity_t*);
+static inline void __update_curr(mycfs_rq_t*, sched_mycfs_entity_t*, unsigned long);
+static void update_curr(mycfs_rq_t*);
+
+static void place_entity(mycfs_rq_t*, sched_mycfs_entity_t*, int);
+static void __enqueue_entity(mycfs_rq_t*, sched_mycfs_entity_t*);
+static void enqueue_mycfs_entity(mycfs_rq_t*, sched_mycfs_entity_t*, flag_t);
+static void enqueue_task_mycfs(rq_t*, task_struct_t*, flag_t);
+
+static void __dequeue_entity(mycfs_rq_t*, sched_mycfs_entity_t*);
+static void dequeue_mycfs_entity(mycfs_rq_t*, sched_mycfs_entity_t*, flag_t);
+static void dequeue_task_mycfs(rq_t*, task_struct_t*, flag_t);
+
+static void check_preempt_tick(mycfs_rq_t*, sched_mycfs_entity_t*);
+static void check_preempt_wakeup_mycfs(rq_t*, task_struct_t*, flag_t);
+
+static void yield_task_mycfs(rq_t*);
+static bool yield_to_task_mycfs(rq_t*, task_struct_t*, bool);
+
+static void switched_from_mycfs(rq_t*, task_struct_t*);
+static void switched_to_mycfs(rq_t*, task_struct_t*);
+
+static void task_fork_mycfs(task_struct_t*);
+
+/*helper function*/
+static inline task_struct_t* task_of(sched_mycfs_entity_t*);
+static inline mycfs_rq_t* task_mycfs_rq(task_struct_t*);
+static inline rq_t* rq_of(mycfs_rq_t*);
+static inline mycfs_rq_t* mycfs_rq_of(sched_mycfs_entity_t*);
+
+static u64 __sched_period(unsigned long);
+static u64 sched_slice(mycfs_rq_t*, sched_mycfs_entity_t*);
+
+static inline u64 max_vruntime(u64 min_vruntime, u64 vruntime);
+static inline u64 min_vruntime(u64 min_vruntime, u64 vruntime);
+
+static inline int entity_before(sched_mycfs_entity_t*, sched_mycfs_entity_t*);
+static void update_min_vruntime(mycfs_rq_t*);
+
+
+
+/*empty function*/
+static unsigned int get_rr_interval_mycfs(rq_t*, task_struct_t*);
+static void prio_changed_mycfs(rq_t*, task_struct_t*, prio_t);
+
+/*function for SMP*/
+static int select_task_rq_mycfs(task_struct_t *p, sd_flag_t, flag_t);
+
+void init_mycfs_rq(mycfs_rq_t *mycfs_rq)
 {
-	return task_cpu(p); /* mycfs tasks as never migrated */
+	mycfs_rq->tasks_timeline = RB_ROOT;
+	mycfs_rq->nr_running = 0;
+	mycfs_rq->min_vruntime = (u64)(-(1LL << 20));
 }
-#endif /* CONFIG_SMP */
 
-static inline struct task_struct *task_of(struct sched_mycfs_entity *my_se)
+static inline task_struct_t *task_of(sched_mycfs_entity_t *my_se)
 {
-	return container_of(my_se, struct task_struct, my_se);
+	return container_of(my_se, task_struct_t, my_se);
 }
 
-static struct task_struct *pick_next_task_mycfs(struct rq *rq)
+static inline rq_t *rq_of(mycfs_rq_t *mycfs_rq)
+{
+	return mycfs_rq->rq;
+}
+
+static inline mycfs_rq_t *task_mycfs_rq(task_struct_t *p)
+{
+	return p->my_se.mycfs_rq;
+}
+
+/* runqueue on which this entity is (to be) queued */
+static inline mycfs_rq_t *mycfs_rq_of(sched_mycfs_entity_t *my_se)
+{
+	return my_se->mycfs_rq;
+}
+
+static task_struct_t *pick_next_task_mycfs(rq_t *rq)
 {   
     struct rb_node *left = rq->mycfs.rb_leftmost;
     if (!left) {
@@ -65,21 +156,6 @@ static struct task_struct *pick_next_task_mycfs(struct rq *rq)
     */
 }
 
-static inline struct rq *rq_of(struct mycfs_rq *mycfs_rq)
-{
-	return mycfs_rq->rq;
-}
-
-static inline struct mycfs_rq *task_mycfs_rq(struct task_struct *p)
-{
-	return p->my_se.mycfs_rq;
-}
-
-/* runqueue on which this entity is (to be) queued */
-static inline struct mycfs_rq *mycfs_rq_of(struct sched_mycfs_entity *my_se)
-{
-	return my_se->mycfs_rq;
-}
 
 static inline u64 max_vruntime(u64 min_vruntime, u64 vruntime)
 {
@@ -99,7 +175,7 @@ static inline u64 min_vruntime(u64 min_vruntime, u64 vruntime)
 	return min_vruntime;
 }
 
-static void update_min_vruntime(struct mycfs_rq *mycfs_rq)
+static void update_min_vruntime(mycfs_rq_t *mycfs_rq)
 {
 	u64 vruntime = mycfs_rq->min_vruntime;
 
@@ -107,8 +183,8 @@ static void update_min_vruntime(struct mycfs_rq *mycfs_rq)
 		vruntime = mycfs_rq->curr->vruntime;
 
 	if (mycfs_rq->rb_leftmost) {
-		struct sched_mycfs_entity *my_se = rb_entry(mycfs_rq->rb_leftmost, 
-											struct sched_mycfs_entity,run_node);
+		sched_mycfs_entity_t *my_se = rb_entry(mycfs_rq->rb_leftmost, 
+											sched_mycfs_entity_t,run_node);
 
 		if (!mycfs_rq->curr)
 			vruntime = my_se->vruntime;
@@ -121,7 +197,7 @@ static void update_min_vruntime(struct mycfs_rq *mycfs_rq)
 }
 
 static inline void
-__update_curr(struct mycfs_rq *mycfs_rq, struct sched_mycfs_entity *curr, unsigned long delta_exec)
+__update_curr(mycfs_rq_t *mycfs_rq, sched_mycfs_entity_t *curr, unsigned long delta_exec)
 {
 	/*
 	 * Note: Since we use equal weight, we can simply use 
@@ -132,9 +208,9 @@ __update_curr(struct mycfs_rq *mycfs_rq, struct sched_mycfs_entity *curr, unsign
 
 }
 
-static void update_curr(struct mycfs_rq *mycfs_rq)
+static void update_curr(mycfs_rq_t *mycfs_rq)
 {
-	struct sched_mycfs_entity *curr = mycfs_rq->curr;
+	sched_mycfs_entity_t *curr = mycfs_rq->curr;
 	u64 now = rq_of(mycfs_rq)->clock_task;
 	unsigned long delta_exec;
 
@@ -151,19 +227,20 @@ static void update_curr(struct mycfs_rq *mycfs_rq)
 }
 
 
-static inline int entity_before(struct sched_mycfs_entity *a, struct sched_mycfs_entity *b){
+
+static inline int entity_before(sched_mycfs_entity_t *a, sched_mycfs_entity_t *b){
 	return (s64)(a->vruntime - b->vruntime) < 0;
 }
 
-static void __enqueue_entity(struct mycfs_rq *mycfs_rq, struct sched_mycfs_entity *my_se){
+static void __enqueue_entity(mycfs_rq_t *mycfs_rq, sched_mycfs_entity_t *my_se){
 	struct rb_node **link= &mycfs_rq->tasks_timeline.rb_node;
 	struct rb_node *parent = NULL;
-	struct sched_mycfs_entity *entry;
+	sched_mycfs_entity_t *entry;
 	int leftmost = 1;
 
 	while (*link) {
 		parent = *link;
-		entry = rb_entry(parent, struct sched_mycfs_entity, run_node);
+		entry = rb_entry(parent, sched_mycfs_entity_t, run_node);
 		/*
 		 * We dont care about collisions. Nodes with
 		 * the same key stay together.
@@ -185,7 +262,7 @@ static void __enqueue_entity(struct mycfs_rq *mycfs_rq, struct sched_mycfs_entit
 }
 
 static void
-place_entity(struct mycfs_rq *mycfs_rq, struct sched_mycfs_entity *my_se, int initial)
+place_entity(mycfs_rq_t *mycfs_rq, sched_mycfs_entity_t *my_se, int initial)
 {
 	u64 vruntime = mycfs_rq->min_vruntime;
 
@@ -210,10 +287,9 @@ place_entity(struct mycfs_rq *mycfs_rq, struct sched_mycfs_entity *my_se, int in
 }
 
 static void 
-enqueue_mycfs_entity(struct mycfs_rq *mycfs_rq, struct sched_mycfs_entity *my_se, int flags){
+enqueue_mycfs_entity(mycfs_rq_t *mycfs_rq, sched_mycfs_entity_t *my_se, int flags){
 	if (!(flags & ENQUEUE_WAKEUP) || (flags & ENQUEUE_WAKING))
 		my_se->vruntime += mycfs_rq->min_vruntime;
-
 	update_curr(mycfs_rq);
 
 	if(flags & ENQUEUE_WAKEUP){
@@ -227,10 +303,11 @@ enqueue_mycfs_entity(struct mycfs_rq *mycfs_rq, struct sched_mycfs_entity *my_se
 	my_se->on_rq = 1;
 }
 
-static void enqueue_task_mycfs(struct rq *rq, struct task_struct *p, int flags)
+static void enqueue_task_mycfs(rq_t *rq, task_struct_t *p, int flags)
 {
-	struct mycfs_rq *mycfs_rq = &(rq->mycfs);
-	struct sched_mycfs_entity *my_se = &p -> my_se;
+	mycfs_rq_t *mycfs_rq = &(rq->mycfs);
+	sched_mycfs_entity_t *my_se = &p -> my_se;
+	printk(KERN_WARNING "hello!\n");
 
 	enqueue_mycfs_entity(mycfs_rq, my_se, flags);
 
@@ -238,7 +315,7 @@ static void enqueue_task_mycfs(struct rq *rq, struct task_struct *p, int flags)
 
 }
 
-static void __dequeue_entity(struct mycfs_rq *mycfs_rq, struct sched_mycfs_entity *my_se)
+static void __dequeue_entity(mycfs_rq_t *mycfs_rq, sched_mycfs_entity_t *my_se)
 {
 	if (mycfs_rq->rb_leftmost == &my_se->run_node) {
 		struct rb_node *next_node;
@@ -251,7 +328,7 @@ static void __dequeue_entity(struct mycfs_rq *mycfs_rq, struct sched_mycfs_entit
 }
 
 static void
-dequeue_mycfs_entity(struct mycfs_rq *mycfs_rq, struct sched_mycfs_entity *my_se, int flags)
+dequeue_mycfs_entity(mycfs_rq_t *mycfs_rq, sched_mycfs_entity_t *my_se, int flags)
 {
 	
 	update_curr(mycfs_rq);
@@ -266,17 +343,17 @@ dequeue_mycfs_entity(struct mycfs_rq *mycfs_rq, struct sched_mycfs_entity *my_se
 	update_min_vruntime(mycfs_rq);
 }
 
-static void dequeue_task_mycfs(struct rq *rq, struct task_struct *p, int flags)
+static void dequeue_task_mycfs(rq_t *rq, task_struct_t *p, int flags)
 {
-	struct mycfs_rq *mycfs_rq = &(rq->mycfs);
-	struct sched_mycfs_entity *my_se = &p->my_se;
+	mycfs_rq_t *mycfs_rq = &(rq->mycfs);
+	sched_mycfs_entity_t *my_se = &p->my_se;
 
 	dequeue_mycfs_entity(mycfs_rq, my_se, flags);
 	mycfs_rq->nr_running--;
 
 }
 
-static void put_prev_entity(struct mycfs_rq *mycfs_rq, struct sched_mycfs_entity *prev)
+static void put_prev_entity(mycfs_rq_t *mycfs_rq, sched_mycfs_entity_t *prev)
 {
 	/*
 	 * If still on the runqueue then deactivate_task()
@@ -294,10 +371,10 @@ static void put_prev_entity(struct mycfs_rq *mycfs_rq, struct sched_mycfs_entity
 /*
  * Account for a descheduled task:
  */
-static void put_prev_task_mycfs(struct rq *rq, struct task_struct *prev)
+static void put_prev_task_mycfs(rq_t *rq, task_struct_t *prev)
 {
-	struct sched_mycfs_entity *my_se = &prev->my_se;
-	struct mycfs_rq *mycfs_rq = mycfs_rq_of(my_se);
+	sched_mycfs_entity_t *my_se = &prev->my_se;
+	mycfs_rq_t *mycfs_rq = mycfs_rq_of(my_se);
 
 	put_prev_entity(mycfs_rq, my_se);
 }
@@ -329,7 +406,7 @@ static u64 __sched_period(unsigned long nr_running)
  *
  * s = p*P[w/rw]
  */
-static u64 sched_slice(struct mycfs_rq *mycfs_rq, struct sched_mycfs_entity *my_se)
+static u64 sched_slice(mycfs_rq_t *mycfs_rq, sched_mycfs_entity_t *my_se)
 {
 	u64 slice = __sched_period(mycfs_rq->nr_running + !my_se->on_rq);
 
@@ -352,23 +429,23 @@ static u64 sched_slice(struct mycfs_rq *mycfs_rq, struct sched_mycfs_entity *my_
 	return slice;
 }
 
-struct sched_mycfs_entity *__pick_first_mycfs_entity(struct mycfs_rq *mycfs_rq)
+sched_mycfs_entity_t *__pick_first_mycfs_entity(mycfs_rq_t *mycfs_rq)
 {
 	struct rb_node *left = mycfs_rq->rb_leftmost;
 
 	if (!left)
 		return NULL;
 
-	return rb_entry(left, struct sched_mycfs_entity, run_node);
+	return rb_entry(left, sched_mycfs_entity_t, run_node);
 }
 
 /*
  * Preempt the current task with a newly woken task if needed:
  */
-static void check_preempt_tick(struct mycfs_rq *mycfs_rq, struct sched_mycfs_entity *curr)
+static void check_preempt_tick(mycfs_rq_t *mycfs_rq, sched_mycfs_entity_t *curr)
 {
 	unsigned long ideal_runtime, delta_exec;
-	struct sched_mycfs_entity *my_se;
+	sched_mycfs_entity_t *my_se;
 	u64 now = rq_of(mycfs_rq)->clock_task;
 	s64 delta;
 
@@ -399,7 +476,7 @@ static void check_preempt_tick(struct mycfs_rq *mycfs_rq, struct sched_mycfs_ent
 }
 
 static void
-entity_tick(struct mycfs_rq *mycfs_rq, struct sched_mycfs_entity *curr, int queued)
+entity_tick(mycfs_rq_t *mycfs_rq, sched_mycfs_entity_t *curr, int queued)
 {
 	update_curr(mycfs_rq);
 
@@ -407,10 +484,10 @@ entity_tick(struct mycfs_rq *mycfs_rq, struct sched_mycfs_entity *curr, int queu
 		check_preempt_tick(mycfs_rq, curr);
 }
 
-static void task_tick_mycfs(struct rq *rq, struct task_struct *curr, int queued)
+static void task_tick_mycfs(rq_t* rq, task_struct_t* curr, int queued)
 {
-	struct sched_mycfs_entity *my_se = &curr->my_se;
-	struct mycfs_rq *mycfs_rq = mycfs_rq_of(my_se); //check whether we can directly use rq-> 
+	sched_mycfs_entity_t *my_se = &curr->my_se;
+	mycfs_rq_t *mycfs_rq = mycfs_rq_of(my_se); //check whether we can directly use rq-> 
 
 	entity_tick(mycfs_rq, my_se, queued);
 }
@@ -420,7 +497,7 @@ static void task_tick_mycfs(struct rq *rq, struct task_struct *curr, int queued)
  * We are picking a new current task - update its stats:
  */
 static inline 
-void update_stats_curr_start(struct mycfs_rq *mycfs_rq, struct sched_mycfs_entity *my_se)
+void update_stats_curr_start(mycfs_rq_t *mycfs_rq, sched_mycfs_entity_t *my_se)
 {
 	/*
 	 * We are starting a new run period:
@@ -428,7 +505,7 @@ void update_stats_curr_start(struct mycfs_rq *mycfs_rq, struct sched_mycfs_entit
 	my_se->exec_start = rq_of(mycfs_rq)->clock_task;
 }
 
-static void set_next_entity(struct mycfs_rq *mycfs_rq, struct sched_mycfs_entity *my_se)
+static void set_next_entity(mycfs_rq_t *mycfs_rq, sched_mycfs_entity_t *my_se)
 {
 	/* 'current' is not kept within the tree. */
 	if (my_se->on_rq) {
@@ -447,18 +524,17 @@ static void set_next_entity(struct mycfs_rq *mycfs_rq, struct sched_mycfs_entity
 	//se->prev_sum_exec_runtime = se->sum_exec_runtime;
 }
 
-static void set_curr_task_mycfs(struct rq *rq)
+static void set_curr_task_mycfs(rq_t *rq)
 {
-	struct sched_mycfs_entity *my_se = &rq->curr->my_se;
-	struct mycfs_rq *mycfs_rq = mycfs_rq_of(my_se); //maybe can change to rq->mycfs_rq
-
+	sched_mycfs_entity_t *my_se = &rq->curr->my_se;
+	mycfs_rq_t *mycfs_rq = mycfs_rq_of(my_se); //maybe can change to rq->mycfs_rq
 	set_next_entity(mycfs_rq, my_se);
 }
 
 /*
- * We switched to the sched_fair class.
+ * We switched to the sched_mycfs class.
  */
-static void switched_to_mycfs(struct rq *rq, struct task_struct *p)
+static void switched_to_mycfs(rq_t *rq, task_struct_t *p)
 {
 	if (!p->my_se.on_rq)
 		return;
@@ -477,11 +553,11 @@ static void switched_to_mycfs(struct rq *rq, struct task_struct *p)
 /*
  * Preempt the current task with a newly woken task if needed:
  */
-static void check_preempt_wakeup(struct rq *rq, struct task_struct *p, int wake_flags)
+static void check_preempt_wakeup_mycfs(rq_t *rq, task_struct_t *p, int wake_flags)
 {
-	struct task_struct *curr = rq->curr;
-	struct sched_mycfs_entity *my_se = &curr->my_se, *pse = &p->my_se;
-	//struct mycfs_rq *mycfs_rq = task_mycfs_rq(curr);
+	task_struct_t *curr = rq->curr;
+	sched_mycfs_entity_t *my_se = &curr->my_se, *pse = &p->my_se;
+	//mycfs_rq_t *mycfs_rq = task_mycfs_rq(curr);
 	//int scale = mycfs_rq->nr_running >= sched_nr_latency;
 	
 
@@ -515,12 +591,12 @@ preempt:
 	
 }
 
-static void prio_changed_mycfs(struct rq *rq, struct task_struct *p, int oldprio)
+static void prio_changed_mycfs(rq_t *rq, task_struct_t *p, prio_t oldprio)
 {
 	
 }
 
-static unsigned int get_rr_interval_mycfs(struct rq *rq, struct task_struct *task)
+static unsigned int get_rr_interval_mycfs(rq_t *rq, task_struct_t *task)
 {
 	return 0;
 }
@@ -530,12 +606,12 @@ static unsigned int get_rr_interval_mycfs(struct rq *rq, struct task_struct *tas
  *  - child not yet on the tasklist
  *  - preemption disabled
  */
-static void task_fork_mycfs(struct task_struct *p)
+static void task_fork_mycfs(task_struct_t *p)
 {
-	struct mycfs_rq *mycfs_rq;
-	struct sched_mycfs_entity *my_se = &p->my_se, *curr;
+	mycfs_rq_t *mycfs_rq;
+	sched_mycfs_entity_t *my_se = &p->my_se, *curr;
 	int this_cpu = smp_processor_id();
-	struct rq *rq = this_rq();
+	rq_t *rq = this_rq();
 	unsigned long flags;
 
 	raw_spin_lock_irqsave(&rq->lock, flags);
@@ -563,25 +639,39 @@ static void task_fork_mycfs(struct task_struct *p)
 	raw_spin_unlock_irqrestore(&rq->lock, flags);
 }
 
-void init_mycfs_rq(struct mycfs_rq *mycfs_rq)
-{
-	mycfs_rq->tasks_timeline = RB_ROOT;
-	mycfs_rq->nr_running = 0;
-	mycfs_rq->min_vruntime = (u64)(-(1LL << 20));
+static void yield_task_mycfs(rq_t *rq){
+
 }
 
-const struct sched_class mycfs_sched_class = {
+static bool yield_to_task_mycfs(rq_t *rq, task_struct_t *p, bool preempt){
+	return true;
+}
+
+static void switched_from_mycfs(rq_t *rq, task_struct_t *p){
+
+}
+
+#ifdef CONFIG_SMP
+static int select_task_rq_mycfs(task_struct_t *p, sd_flag_t sd_flag, flag_t flags)
+{
+	return task_cpu(p); /* mycfs tasks as never migrated */
+}
+#endif /* CONFIG_SMP */
+
+const sched_class_t mycfs_sched_class = {
 	.next				= &idle_sched_class,
 	.enqueue_task		= enqueue_task_mycfs,
 	.dequeue_task 		= dequeue_task_mycfs,
-	.check_preempt_curr = check_preempt_wakeup,
+	.check_preempt_curr = check_preempt_wakeup_mycfs,
 	.pick_next_task		= pick_next_task_mycfs,
 	.put_prev_task		= put_prev_task_mycfs,
+
+	.yield_task			= yield_task_mycfs,
+	.yield_to_task		= yield_to_task_mycfs,
 
 #ifdef CONFIG_SMP
 	.select_task_rq		= select_task_rq_mycfs,
 #endif
-
 	.set_curr_task      = set_curr_task_mycfs,
 	.task_tick			= task_tick_mycfs,
 	.task_fork			= task_fork_mycfs,
@@ -590,5 +680,7 @@ const struct sched_class mycfs_sched_class = {
 
 	.prio_changed		= prio_changed_mycfs,
 	.switched_to		= switched_to_mycfs,
+	.switched_from		= switched_from_mycfs,
+
 
 };
