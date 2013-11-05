@@ -70,7 +70,7 @@ static void put_prev_task_mycfs(rq_t*, task_struct_t*);
 static void put_prev_entity(mycfs_rq_t*, sched_mycfs_entity_t*);
 
 static task_struct_t* pick_next_task_mycfs(rq_t*);
-static sched_mycfs_entity_t* pick_next_entity(cfs_rq_t*);
+static sched_mycfs_entity_t* pick_next_entity(mycfs_rq_t*);
 static sched_mycfs_entity_t* __pick_next_entity(sched_mycfs_entity_t*);
 static void set_next_entity(mycfs_rq_t*, sched_mycfs_entity_t*);
 
@@ -583,7 +583,7 @@ preempt:
 
 static int wakeup_preempt_entity(sched_mycfs_entity_t* curr, sched_mycfs_entity_t* se)
 {
-
+	return 0; //todo
 }
 
 static void prio_changed_mycfs(rq_t *rq, task_struct_t *p, prio_t oldprio)
@@ -636,9 +636,9 @@ static void task_fork_mycfs(task_struct_t *p)
 
 static void yield_task_mycfs(rq_t *rq){
 	task_struct_t* curr = rq->curr;
-	cfs_rq_t* cfs_rq = task_cfs_rq(curr);
+	mycfs_rq_t* mycfs_rq = task_mycfs_rq(curr);
 	update_rq_clock(rq);
-	update_curr(cfs_rq);
+	update_curr(mycfs_rq);
 	rq->skip_clock_update = 1;
 }
 
