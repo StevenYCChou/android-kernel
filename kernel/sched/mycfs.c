@@ -43,6 +43,12 @@ static void switched_from_mycfs(rq_t*, task_struct_t*);
 
 /* ==================================================================  */
 
+/* runqueue on which this entity is (to be) queued */
+static inline mycfs_rq_t *mycfs_rq_of(sched_mycfs_entity_t *my_se)
+{
+	return my_se->mycfs_rq;
+}
+
 static void check_preempt_wakeup_mycfs(rq_t* rq, task_struct_t* p, int wake_flags){
 
 }
@@ -99,6 +105,7 @@ static struct task_struct *pick_next_task_mycfs(struct rq *rq)
 
 static void enqueue_task_mycfs(struct rq *rq, struct task_struct *p, int flags)
 {
+	printk("*** Enqueue_task_mycfs is called \n");
 }
 
 /*
@@ -107,6 +114,7 @@ static void enqueue_task_mycfs(struct rq *rq, struct task_struct *p, int flags)
  */
 static void dequeue_task_mycfs(struct rq *rq, struct task_struct *p, int flags)
 {
+	printk("*** Dequeue_task_mycfs is called \n");
 	// raw_spin_unlock_irq(&rq->lock);
 	// printk(KERN_ERR "bad: scheduling from the mycfs thread!\n");
 	// dump_stack();
@@ -115,14 +123,39 @@ static void dequeue_task_mycfs(struct rq *rq, struct task_struct *p, int flags)
 
 static void put_prev_task_mycfs(struct rq *rq, struct task_struct *prev)
 {
+	printk("*** put_prev_task_mycfs is called \n");
 }
 
 static void task_tick_mycfs(struct rq *rq, struct task_struct *curr, int queued)
 {
 }
 
+static void
+set_next_entity(struct mycfs_rq *mycfs_rq, struct sched_mycfs_entity *my_se)
+{
+	printk("*** set_next_entity is called \n");
+	/*
+	// 'current' is not kept within the tree.
+	if (my_se->on_rq) {
+		__dequeue_entity(mycfs_rq, my_se);
+	}
+
+	update_stats_curr_start(mycfs_rq, my_se);
+	mycfs_rq->curr = my_se;
+
+	my_se->prev_sum_exec_runtime = my_se->sum_exec_runtime;
+	*/
+}
+
 static void set_curr_task_mycfs(struct rq *rq)
 {
+	sched_mycfs_entity_t *my_se = &rq->curr->my_se;
+	mycfs_rq_t *mycfs_rq = mycfs_rq_of(my_se); //maybe can change to rq->mycfs_rq
+
+	
+	printk("***In set_curr_task_mycfs bf set_next_entity \n");
+	
+	set_next_entity(mycfs_rq, my_se);
 }
 
 static void prio_changed_mycfs(struct rq *rq, struct task_struct *p, int oldprio)

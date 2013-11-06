@@ -4304,6 +4304,7 @@ do_sched_setscheduler(pid_t pid, int policy, struct sched_param __user *param)
 	p = find_process_by_pid(pid);
 	if (p != NULL)
 		retval = sched_setscheduler(p, policy, &lparam);
+		
 	rcu_read_unlock();
 
 	if(policy == 6)
@@ -4356,7 +4357,7 @@ SYSCALL_DEFINE1(sched_getscheduler, pid_t, pid)
 	rcu_read_lock();
 	p = find_process_by_pid(pid);
 
-	printk("get_scheduler called \n");
+	//printk("get_scheduler called \n");
 
 	if (p) {
 		retval = security_task_getscheduler(p);
@@ -4366,7 +4367,7 @@ SYSCALL_DEFINE1(sched_getscheduler, pid_t, pid)
 	}
 	rcu_read_unlock();
 
-	printk("get_scheduler end \n");
+	//printk("get_scheduler end \n");
 	return retval;
 }
 
