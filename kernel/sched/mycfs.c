@@ -39,7 +39,7 @@ typedef struct sched_class sched_class_t;
 */
 
 /*Initialization */
-void init_mycfs_rq(mycfs_rq_t *mycfs_rq);
+void init_mycfs_rq(mycfs_rq_t*, rq_t*);
 
 /*task updating related function*/
 static void update_curr(mycfs_rq_t*);
@@ -90,7 +90,7 @@ static inline void update_stats_curr_start(mycfs_rq_t*, sched_mycfs_entity_t*);
 static inline task_struct_t* task_of(sched_mycfs_entity_t*);
 static inline mycfs_rq_t* task_mycfs_rq(task_struct_t*);
 static inline rq_t* rq_of(mycfs_rq_t*);
-static inline mycfs_rq_t* mycfs_rq_of(sched_mycfs_entity_t*);
+
 
 static u64 __sched_period(unsigned long);
 static u64 sched_slice(mycfs_rq_t*, sched_mycfs_entity_t*);
@@ -111,10 +111,13 @@ sched_mycfs_entity_t* __pick_first_mycfs_entity(mycfs_rq_t*);
 /*function for SMP*/
 static int select_task_rq_mycfs(task_struct_t *p, sd_flag_t, flag_t);
 
-void init_mycfs_rq(mycfs_rq_t *mycfs_rq)
+void init_mycfs_rq(mycfs_rq_t *mycfs_rq, rq_t* rq)
 {
-	printk("*** init_mycfs is call, this is @@@1 try\n");
+	//printk("*** init_mycfs is call, this is @@@1 try\n");
+	printk("***The address of rq in init_mycfs_rq:  %d, %pa\n", (int)rq, rq);
+	mycfs_rq->rq = rq;
 
+	printk("***The address mycfs_rq->rq in init_mycfs_rq:  %d, %pa\n", (int)mycfs_rq->rq, mycfs_rq->rq);
 	mycfs_rq->tasks_timeline = RB_ROOT;
 	mycfs_rq->nr_running = 0;
 	mycfs_rq->min_vruntime = (u64)(-(1LL << 20));
@@ -127,7 +130,13 @@ static inline task_struct_t *task_of(sched_mycfs_entity_t *my_se)
 
 static inline rq_t *rq_of(mycfs_rq_t *mycfs_rq)
 {
+	printk("***rq_of_is called.\n");
+	
+	
+	printk("***The address of rq in rq_of:  %d, %pa\n", (int)container_of(mycfs_rq, rq_t, mycfs), container_of(mycfs_rq, rq_t, mycfs));
+	printk("***The address of rq in rq_of(mycfs):  %d, %pa\n", (int)mycfs_rq->rq, mycfs_rq->rq);
 	return mycfs_rq->rq;
+	//return container_of(mycfs_rq, rq_t, mycfs);
 }
 
 static inline mycfs_rq_t *task_mycfs_rq(task_struct_t *p)
@@ -135,11 +144,7 @@ static inline mycfs_rq_t *task_mycfs_rq(task_struct_t *p)
 	return p->my_se.mycfs_rq;
 }
 
-/* runqueue on which this entity is (to be) queued */
-static inline mycfs_rq_t *mycfs_rq_of(sched_mycfs_entity_t *my_se)
-{
-	return my_se->mycfs_rq;
-}
+
 
 /*
 static inline sched_mycfs_entity_t* pick_next_entity(mycfs_rq_t* mycfs_rq){
@@ -370,13 +375,15 @@ enqueue_mycfs_entity(mycfs_rq_t *mycfs_rq, sched_mycfs_entity_t *my_se, int flag
 
 static void enqueue_task_mycfs(rq_t *rq, task_struct_t *p, int flags)
 {
+	
 	mycfs_rq_t *mycfs_rq = &(rq->mycfs);
 	sched_mycfs_entity_t *my_se = &p -> my_se;
-	printk(KERN_WARNING "hello!\n");
+	printk("***In enqueue_task_mycfs is called. \n");
 
 	enqueue_mycfs_entity(mycfs_rq, my_se, flags);
 
 	mycfs_rq->nr_running++;
+	printk("***In enqueue_task_mycfs is end. \n");
 
 }
 
@@ -417,8 +424,12 @@ static void dequeue_task_mycfs(rq_t *rq, task_struct_t *p, flag_t flags)
 	mycfs_rq_t *mycfs_rq = &(rq->mycfs);
 	sched_mycfs_entity_t *my_se = &p->my_se;
 
+	printk("***In dequeue_task_mycfs is called. \n");
+
 	dequeue_mycfs_entity(mycfs_rq, my_se, flags);
 	--mycfs_rq->nr_running;
+
+	printk("***In dequeue_task_mycfs is end. \n");
 
 }
 
@@ -443,7 +454,7 @@ static void put_prev_entity(mycfs_rq_t *mycfs_rq, sched_mycfs_entity_t *prev)
 static void put_prev_task_mycfs(rq_t *rq, task_struct_t *prev)
 {
 	sched_mycfs_entity_t *my_se = &prev->my_se;
-	mycfs_rq_t *mycfs_rq = mycfs_rq_of(my_se);
+	mycfs_rq_t *mycfs_rq = &rq->mycfs;
 
 	put_prev_entity(mycfs_rq, my_se);
 }
@@ -496,10 +507,17 @@ sched_mycfs_entity_t *__pick_first_mycfs_entity(mycfs_rq_t *mycfs_rq)
  */
 static void check_preempt_tick(mycfs_rq_t *mycfs_rq, sched_mycfs_entity_t *curr)
 {
+
+	
+
 	unsigned long ideal_runtime, delta_exec;
 	sched_mycfs_entity_t *my_se;
 	
+
+
 	s64 delta;
+
+	printk("***In check_preempt_tick is called. \n");
 
 	ideal_runtime = sched_slice(mycfs_rq, curr);
 	delta_exec = curr->sum_exec_runtime - curr->prev_sum_exec_runtime;
@@ -528,22 +546,32 @@ static void check_preempt_tick(mycfs_rq_t *mycfs_rq, sched_mycfs_entity_t *curr)
 	 */
 	if (delta > ideal_runtime)
 		resched_task(rq_of(mycfs_rq)->curr);
+
+	printk("***In check_preempt_tick is end. \n");
+
+	print_it_all(mycfs_rq, curr);
 }
 
 static void
 entity_tick(mycfs_rq_t *mycfs_rq, sched_mycfs_entity_t *curr, int queued)
 {
+	printk("***In entity_tick is called. \n");
 	update_curr(mycfs_rq);
 
 	if (mycfs_rq->nr_running > 1)
 		check_preempt_tick(mycfs_rq, curr);
+	printk("***In entity_tick is end. \n");
 }
 
 static void task_tick_mycfs(rq_t* rq, task_struct_t* curr, int queued)
 {
+	
 	sched_mycfs_entity_t *my_se = &curr->my_se;
-	mycfs_rq_t *mycfs_rq = mycfs_rq_of(my_se);
+	mycfs_rq_t *mycfs_rq = &rq->mycfs;
+
+	printk("***In task_tick_mycfs is called. \n");
 	entity_tick(mycfs_rq, my_se, queued);
+	printk("***In task_tick_mycfs is end. \n");
 }
 
 
@@ -556,27 +584,43 @@ void update_stats_curr_start(mycfs_rq_t *mycfs_rq, sched_mycfs_entity_t *my_se)
 	/*
 	 * We are starting a new run period:
 	 */
-	my_se->exec_start = rq_of(mycfs_rq)->clock_task;
+	rq_t* rq;
+
+	printk("***In update_stats_curr_start, FUCK MY LIFE %llu \n", my_se->exec_start);
+
+
+	rq=rq_of(mycfs_rq);
+
+	printk("*** successful get rq\n");
+	my_se->exec_start = rq->clock_task;
+
+	printk("***update_stats_curr_start end and exec_start: %llu\n", my_se->exec_start);
 }
 
 static void
 set_next_entity(struct mycfs_rq *mycfs_rq, struct sched_mycfs_entity *my_se)
 {
+	printk("***In set_next_entity is called. \n");
 	/* 'current' is not kept within the tree. */
 	if (my_se->on_rq) {
 		__dequeue_entity(mycfs_rq, my_se);
 	}
 
+	printk("***In set_next_entity before update_stats_curr_start(). \n");
 	update_stats_curr_start(mycfs_rq, my_se);
-	mycfs_rq->curr = my_se;
 
+	printk("***In set_next_entity before mycfs_rq->curr . \n");
+	mycfs_rq->curr = my_se;
+	printk("***In set_next_entity after mycfs_rq->curr . \n");
 	my_se->prev_sum_exec_runtime = my_se->sum_exec_runtime;
+
+	printk("***In set_next_entity is end. \n");
 }
 
 static void set_curr_task_mycfs(rq_t *rq)
 {
 	sched_mycfs_entity_t *my_se = &rq->curr->my_se;
-	mycfs_rq_t *mycfs_rq = mycfs_rq_of(my_se); //maybe can change to rq->mycfs_rq
+	mycfs_rq_t *mycfs_rq = &(rq->mycfs); //maybe can change to rq->mycfs_rq
 
 	
 	printk("***In set_curr_task_mycfs \n");
@@ -641,7 +685,7 @@ static void check_preempt_wakeup_mycfs(rq_t *rq, task_struct_t *p, int wake_flag
 		return;
 
 	//find_matching_se(&se, &pse);
-	update_curr(mycfs_rq_of(curr_my_se));
+	update_curr(&rq->mycfs);
 	//BUG_ON(!pse);
 	if (wakeup_preempt_entity(curr_my_se, p_my_se) == 1) {
 		/*
@@ -745,7 +789,7 @@ static bool yield_to_task_mycfs(rq_t* rq, task_struct_t *p, bool preempt){
 
 static void switched_from_mycfs(rq_t *rq, task_struct_t *p){
 	sched_mycfs_entity_t *my_se = &p->my_se;
-	mycfs_rq_t *mycfs_rq = mycfs_rq_of(my_se);
+	mycfs_rq_t *mycfs_rq = &rq->mycfs;
 
 	/*
 	 * Ensure the task's vruntime is normalized, so that when its
