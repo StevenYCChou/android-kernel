@@ -22,14 +22,15 @@ static int select_task_rq_mycfs(struct task_struct *p, int sd_flag, int flags)
  */
 static void check_preempt_curr_mycfs(struct rq *rq, struct task_struct *p, int flags)
 {
-	resched_task(rq->mycfs);
+	resched_task(rq->curr);
 }
 
 static struct task_struct *pick_next_task_mycfs(struct rq *rq)
 {
-	schedstat_inc(rq, sched_gomycfs);
-	calc_load_account_mycfs(rq);
-	return rq->mycfs;
+	//schedstat_inc(rq, sched_gomycfs);
+	//calc_load_account_mycfs(rq);
+	//return rq->mycfs;
+	return NULL;
 }
 
 static void enqueue_task_mycfs(struct rq *rq, struct task_struct *p, int flags)
