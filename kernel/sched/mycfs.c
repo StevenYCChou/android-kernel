@@ -49,6 +49,23 @@ static inline mycfs_rq_t *mycfs_rq_of(sched_mycfs_entity_t *my_se)
 	return my_se->mycfs_rq;
 }
 
+static inline task_struct_t *task_of(sched_mycfs_entity_t *my_se)
+{
+	return container_of(my_se, task_struct_t, my_se);
+}
+
+static inline rq_t *rq_of(mycfs_rq_t *mycfs_rq)
+{
+	return mycfs_rq->rq;
+}
+
+static inline mycfs_rq_t *task_mycfs_rq(task_struct_t *p)
+{
+	return p->my_se.mycfs_rq;
+}
+
+
+
 static void check_preempt_wakeup_mycfs(rq_t* rq, task_struct_t* p, int wake_flags){
 	printk("*** check_preempt_wakeup_mycfs is called \n");
 }
@@ -78,6 +95,39 @@ static void switched_from_mycfs(rq_t* rq, task_struct_t* p){
 }
 
 /*
+static inline void
+__update_curr(mycfs_rq_t *mycfs_rq, sched_mycfs_entity_t *curr, unsigned long delta_exec)
+{
+	
+	// Note: Since we use equal weight, we can simply use 
+	// original excuted time as virtual runtime.
+	
+	curr->sum_exec_runtime += delta_exec;
+
+	curr->vruntime += delta_exec; 
+	update_min_vruntime(mycfs_rq);
+
+}
+*/
+static void update_curr(mycfs_rq_t *mycfs_rq)
+{
+	sched_mycfs_entity_t *curr = mycfs_rq->curr;
+	u64 now = rq_of(mycfs_rq)->clock_task;
+	unsigned long delta_exec;
+
+	if (unlikely(!curr))
+		return;
+
+	delta_exec = (unsigned long)(now - curr->exec_start);
+	if (!delta_exec)
+		return;
+
+	//__update_curr(mycfs_rq, curr, delta_exec);
+	curr->exec_start = now;
+
+}
+
+/*
  * mycfs-task scheduling class.
  *
  * (NOTE: these are not related to SCHED_IDLE tasks which are
@@ -91,27 +141,53 @@ static void switched_from_mycfs(rq_t* rq, task_struct_t* p){
 // }
 #endif /* CONFIG_SMP */
 
-/*
- * mycfs tasks are unconditionally rescheduled:
-static void check_preempt_curr_mycfs(struct rq *rq, struct task_struct *p, int flags)
-{
-	resched_task(rq->curr);
-}
- */
+
 
 static struct task_struct *pick_next_task_mycfs(struct rq *rq)
 {
-	//printk("*** pick_next_task_mycfs is called \n");
-	//schedstat_inc(rq, sched_gomycfs);
-	//calc_load_account_mycfs(rq);
-	//return rq->mycfs;
+	
 	return NULL;
 }
 
-static void enqueue_task_mycfs(struct rq *rq, struct task_struct *p, int flags)
-{
-	printk("*** Enqueue_task_mycfs is called, pid: %d \n",p->pid);
+
+
+static void 
+enqueue_mycfs_entity(mycfs_rq_t *mycfs_rq, sched_mycfs_entity_t *my_se, int flags){
+	if (!(flags & ENQUEUE_WAKEUP) || (flags & ENQUEUE_WAKING))
+		my_se->vruntime += mycfs_rq->min_vruntime;
+	update_curr(mycfs_rq);
+
+	printk("*** enqueue_mycfs_entity is called, after update_curr\n");
+
+
+	// if(flags & ENQUEUE_WAKEUP){
+	// 	place_entity(mycfs_rq, my_se, 0);
+	// }
+
+	// if (my_se != mycfs_rq->curr){
+	// 	__enqueue_entity(mycfs_rq, my_se);
+	// }
+	
+	my_se->on_rq = 1;
 }
+
+
+static void enqueue_task_mycfs(rq_t *rq, task_struct_t *p, int flags)
+{
+	
+	mycfs_rq_t *mycfs_rq = &(rq->mycfs);
+	sched_mycfs_entity_t *my_se = &p -> my_se;
+	
+	printk("*** Enqueue_task_mycfs is called, pid: %d, nr_running: %d \n",p->pid, (int)mycfs_rq->nr_running);
+
+	enqueue_mycfs_entity(mycfs_rq, my_se, flags);
+
+	mycfs_rq->nr_running++;
+
+	printk("*** Enqueue_task_mycfs is ended, pid: %d, nr_running: %d \n",p->pid, (int)mycfs_rq->nr_running);
+
+}
+
 
 /*
  * It is not legal to sleep in the mycfs task - print a warning
