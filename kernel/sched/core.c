@@ -4291,7 +4291,8 @@ do_sched_setscheduler(pid_t pid, int policy, struct sched_param __user *param)
 	struct task_struct *p;
 	int retval;
 
-	printk("do_sched_setscheduler called \n");
+	if(policy == 6)
+		printk("do_sched_setscheduler called \n");
 
 	if (!param || pid < 0)
 		return -EINVAL;
@@ -4304,6 +4305,9 @@ do_sched_setscheduler(pid_t pid, int policy, struct sched_param __user *param)
 	if (p != NULL)
 		retval = sched_setscheduler(p, policy, &lparam);
 	rcu_read_unlock();
+
+	if(policy == 6)
+		printk("do_sched_setscheduler ended \n");
 
 	return retval;
 }
@@ -4351,6 +4355,9 @@ SYSCALL_DEFINE1(sched_getscheduler, pid_t, pid)
 	retval = -ESRCH;
 	rcu_read_lock();
 	p = find_process_by_pid(pid);
+
+	printk("get_scheduler called \n");
+
 	if (p) {
 		retval = security_task_getscheduler(p);
 		if (!retval)
@@ -4358,6 +4365,8 @@ SYSCALL_DEFINE1(sched_getscheduler, pid_t, pid)
 				| (p->sched_reset_on_fork ? SCHED_RESET_ON_FORK : 0);
 	}
 	rcu_read_unlock();
+
+	printk("get_scheduler end \n");
 	return retval;
 }
 
