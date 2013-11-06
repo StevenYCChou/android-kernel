@@ -59,7 +59,7 @@ static void put_prev_task_mycfs(rq_t*, task_struct_t*);
 static void put_prev_entity(mycfs_rq_t*, sched_mycfs_entity_t*);
 
 static task_struct_t* pick_next_task_mycfs(rq_t*);
-static inline sched_mycfs_entity_t* pick_next_entity(mycfs_rq_t*);
+static inline sched_mycfs_entity_t* pick_next_mycfs_entity(mycfs_rq_t*);
 static void set_next_entity(mycfs_rq_t*, sched_mycfs_entity_t*);
 
 static void task_fork_mycfs(task_struct_t*);
@@ -139,6 +139,7 @@ static inline mycfs_rq_t *mycfs_rq_of(sched_mycfs_entity_t *my_se)
 	return my_se->mycfs_rq;
 }
 
+/*
 static inline sched_mycfs_entity_t* pick_next_entity(mycfs_rq_t* mycfs_rq){
 	return __pick_first_mycfs_entity(mycfs_rq);
 }
@@ -163,6 +164,55 @@ static task_struct_t *pick_next_task_mycfs(rq_t *rq)
 
     return task_of(my_se);
 }
+*/
+/*
+static sched_mycfs_entity_t *__pick_next_entity(sched_mycfs_entity_t *my_se)
+{
+	struct rb_node *next = rb_next(&my_se->run_node);
+
+	if (!next)
+		return NULL;
+
+	return rb_entry(next, sched_mycfs_entity_t, run_node);
+}
+*/
+
+sched_mycfs_entity_t *__pick_first_mycfs_entity(struct mycfs_rq *mycfs_rq)
+{
+	struct rb_node *left = mycfs_rq->rb_leftmost;
+
+	if (!left)
+		return NULL;
+
+	return rb_entry(left, sched_mycfs_entity_t, run_node);
+}
+
+static sched_mycfs_entity_t *pick_next_mycfs_entity(struct mycfs_rq *mycfs_rq)
+{
+	sched_mycfs_entity_t *my_se = __pick_first_mycfs_entity(mycfs_rq);
+
+	return my_se;
+}
+
+static struct task_struct *pick_next_task_mycfs(struct rq *rq)
+{
+	struct task_struct *p;
+	struct mycfs_rq *mycfs_rq = &rq->mycfs;
+	sched_mycfs_entity_t *my_se;
+
+	if (!mycfs_rq->nr_running)
+		return NULL;
+
+	my_se = pick_next_mycfs_entity(mycfs_rq);
+	set_next_entity(mycfs_rq, my_se);
+
+	p = task_of(my_se);
+	
+
+	return p;
+}
+
+
 
 static inline u64 max_vruntime(u64 min_vruntime, u64 vruntime)
 {
@@ -427,6 +477,7 @@ static u64 sched_slice(mycfs_rq_t *mycfs_rq, sched_mycfs_entity_t *my_se)
 	return __sched_period(mycfs_rq->nr_running + !my_se->on_rq);
 }
 
+/*
 sched_mycfs_entity_t *__pick_first_mycfs_entity(mycfs_rq_t *mycfs_rq)
 {
 	struct rb_node *left = mycfs_rq->rb_leftmost;
@@ -436,6 +487,7 @@ sched_mycfs_entity_t *__pick_first_mycfs_entity(mycfs_rq_t *mycfs_rq)
 
 	return rb_entry(left, sched_mycfs_entity_t, run_node);
 }
+*/
 
 /*
  * Preempt the current task with a newly woken task if needed:
@@ -505,7 +557,8 @@ void update_stats_curr_start(mycfs_rq_t *mycfs_rq, sched_mycfs_entity_t *my_se)
 	my_se->exec_start = rq_of(mycfs_rq)->clock_task;
 }
 
-static void set_next_entity(mycfs_rq_t *mycfs_rq, sched_mycfs_entity_t *my_se)
+static void
+set_next_entity(struct mycfs_rq *mycfs_rq, struct sched_mycfs_entity *my_se)
 {
 	/* 'current' is not kept within the tree. */
 	if (my_se->on_rq) {
@@ -522,6 +575,12 @@ static void set_curr_task_mycfs(rq_t *rq)
 {
 	sched_mycfs_entity_t *my_se = &rq->curr->my_se;
 	mycfs_rq_t *mycfs_rq = mycfs_rq_of(my_se); //maybe can change to rq->mycfs_rq
+
+	int i;
+	printk("***In set_curr_task_mycfs \n");
+	for(i=0;i<1000;i++)
+		printk("                                                                       \n");
+
 	set_next_entity(mycfs_rq, my_se);
 }
 

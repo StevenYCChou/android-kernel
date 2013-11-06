@@ -4071,8 +4071,9 @@ __setscheduler(struct rq *rq, struct task_struct *p, int policy, int prio)
 	p->prio = rt_mutex_getprio(p);
     
     if(p->policy == 6){
-    	printk("In __setscheduler bf p->sched_class to ours\n");
+    	
 		p->sched_class = &mycfs_sched_class;
+		printk("***In __setscheduler bf p->sched_class to ours\n");
 	}
     else if (rt_prio(p->prio))
 		p->sched_class = &rt_sched_class;
@@ -4108,6 +4109,8 @@ static int __sched_setscheduler(struct task_struct *p, int policy,
 	const struct sched_class *prev_class;
 	struct rq *rq;
 	int reset_on_fork;
+
+	int i=0;
 
 	/* may grab non-irq protected spin_locks */
 	BUG_ON(in_interrupt());
@@ -4242,6 +4245,13 @@ recheck:
 	prev_class = p->sched_class;
 	__setscheduler(rq, p, policy, param->sched_priority);
 
+	if(policy == 6){
+	printk("***In __setscheduler \n");
+	for(i=0;i<1000;i++)
+		printk("                                                                       \n");
+	}
+	
+
 	if (running)
 		p->sched_class->set_curr_task(rq);
 	if (on_rq)
@@ -4295,7 +4305,7 @@ do_sched_setscheduler(pid_t pid, int policy, struct sched_param __user *param)
 	int retval;
 
 	if(policy == 6){
-		pr_err("***In do_sched_setscheduler, pid: %d, policy: %d\n",pid, policy);
+		printk("***In do_sched_setscheduler, pid: %d, policy: %d\n",pid, policy);
 		
 	}
 	
@@ -4331,7 +4341,7 @@ SYSCALL_DEFINE3(sched_setscheduler, pid_t, pid, int, policy,
 		return -EINVAL;
 
 	if(policy == 6){
-		pr_err("***In SYSCALL_DEFINE3, pid: %d, policy: %d\n",pid, policy);
+		printk("***In SYSCALL_DEFINE3, pid: %d, policy: %d\n",pid, policy);
 		
 	}
 
