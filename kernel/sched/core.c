@@ -87,6 +87,8 @@
 #define CREATE_TRACE_POINTS
 #include <trace/events/sched.h>
 
+#include <linux/kernel.h>
+
 ATOMIC_NOTIFIER_HEAD(migration_notifier_head);
 
 void start_bandwidth_timer(struct hrtimer *period_timer, ktime_t period)
@@ -1730,6 +1732,14 @@ static void __sched_fork(struct task_struct *p)
 	p->se.nr_migrations		= 0;
 	p->se.vruntime			= 0;
 	INIT_LIST_HEAD(&p->se.group_node);
+
+
+	//my_se initialization
+	p->my_se.on_rq			= 0;
+	p->my_se.exec_start		= 0;
+	p->my_se.sum_exec_runtime		= 0;
+	p->my_se.prev_sum_exec_runtime	= 0;
+	p->my_se.vruntime			= 0;
 
 #ifdef CONFIG_SCHEDSTATS
 	memset(&p->se.statistics, 0, sizeof(p->se.statistics));
@@ -4284,9 +4294,10 @@ do_sched_setscheduler(pid_t pid, int policy, struct sched_param __user *param)
 	struct task_struct *p;
 	int retval;
 
-	//if(policy == 6)
-		//printk("#####In do_sched_setscheduler, pid: %d, policy: %d\n", pid, policy);
-	
+	if(policy == 6){
+		pr_err("***In do_sched_setscheduler, pid: %d, policy: %d\n",pid, policy);
+		
+	}
 	
 	if (!param || pid < 0)
 		return -EINVAL;
@@ -4319,8 +4330,10 @@ SYSCALL_DEFINE3(sched_setscheduler, pid_t, pid, int, policy,
 	if (policy < 0)
 		return -EINVAL;
 
-	if(policy == 6)
-		printk("#####In SYSCALL_DEFINE3, pid: %d, policy: %d \n", pid, policy);
+	if(policy == 6){
+		pr_err("***In SYSCALL_DEFINE3, pid: %d, policy: %d\n",pid, policy);
+		
+	}
 
 	return do_sched_setscheduler(pid, policy, param);
 }
