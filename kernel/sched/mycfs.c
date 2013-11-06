@@ -1,8 +1,71 @@
 /*
  *  kernel/sched/mycfs.c
  */
-
+#include <linux/sched.h>
 #include "sched.h"
+
+/*
+* Minimal preemption granularity for CPU-bound tasks:
+* (default: 0.75 msec * (1 + ilog(ncpus)), units: nanoseconds)
+*/
+unsigned int mycfs_sysctl_sched_min_granularity = 750000ULL;
+
+// default sched latency of a process: 6ms
+unsigned int mycfs_sysctl_sched_latency = 6000000ULL;
+
+// if curr->vruntime > se->vruntime for this amount, then this se can preempt curr
+unsigned int mycfs_sysctl_sched_wakeup_granularity = 1000000UL;
+
+// if more than sched_nr_latency process is in mycfs scheduler, replace default __sched_period
+// static unsigned int sched_nr_latency = 8;
+
+typedef int sd_flag_t;
+typedef int flag_t;
+typedef int prio_t;
+
+typedef struct mycfs_rq mycfs_rq_t;
+typedef struct sched_mycfs_entity sched_mycfs_entity_t;
+typedef struct rq rq_t;
+typedef struct task_struct task_struct_t;
+typedef struct sched_class sched_class_t;
+
+void init_mycfs_rq(mycfs_rq_t *);
+
+static void check_preempt_wakeup_mycfs(rq_t*, task_struct_t*, int);
+
+static void yield_task_mycfs(rq_t*);
+static bool yield_to_task_mycfs(rq_t*, task_struct_t*, bool);
+
+static void task_fork_mycfs(task_struct_t*);
+
+static void switched_to_mycfs(rq_t*, task_struct_t*);
+static void switched_from_mycfs(rq_t*, task_struct_t*);
+
+/* ==================================================================  */
+
+static void check_preempt_wakeup_mycfs(rq_t* rq, task_struct_t* p, int wake_flags){
+
+}
+
+static void yield_task_mycfs(rq_t* rq){
+
+}
+
+static bool yield_to_task_mycfs(rq_t* rq, task_struct_t* p, bool preempt){
+	return 1;
+}
+
+static void task_fork_mycfs(task_struct_t* p){
+
+}
+
+static void switched_to_mycfs(rq_t* rq, task_struct_t* p){
+
+}
+
+static void switched_from_mycfs(rq_t* rq, task_struct_t* p){
+
+}
 
 /*
  * mycfs-task scheduling class.
@@ -12,18 +75,19 @@
  */
 
 #ifdef CONFIG_SMP
-static int select_task_rq_mycfs(struct task_struct *p, int sd_flag, int flags)
-{
-	return task_cpu(p); /* mycfs tasks as never migrated */
-}
+// static int select_task_rq_mycfs(struct task_struct *p, int sd_flag, int flags)
+// {
+// 	return task_cpu(p); /* mycfs tasks as never migrated */
+// }
 #endif /* CONFIG_SMP */
+
 /*
  * mycfs tasks are unconditionally rescheduled:
- */
 static void check_preempt_curr_mycfs(struct rq *rq, struct task_struct *p, int flags)
 {
 	resched_task(rq->curr);
 }
+ */
 
 static struct task_struct *pick_next_task_mycfs(struct rq *rq)
 {
@@ -35,8 +99,6 @@ static struct task_struct *pick_next_task_mycfs(struct rq *rq)
 
 static void enqueue_task_mycfs(struct rq *rq, struct task_struct *p, int flags)
 {
-
-
 }
 
 /*
@@ -63,11 +125,6 @@ static void set_curr_task_mycfs(struct rq *rq)
 {
 }
 
-static void switched_to_mycfs(struct rq *rq, struct task_struct *p)
-{
-	
-}
-
 static void prio_changed_mycfs(struct rq *rq, struct task_struct *p, int oldprio)
 {
 	
@@ -89,20 +146,24 @@ const struct sched_class mycfs_sched_class = {
 	.next				= &idle_sched_class,
 	.enqueue_task		= enqueue_task_mycfs,
 	.dequeue_task 		= dequeue_task_mycfs,
-	.check_preempt_curr = check_preempt_curr_mycfs,
+	.check_preempt_curr = check_preempt_wakeup_mycfs,
 	.pick_next_task		= pick_next_task_mycfs,
 	.put_prev_task		= put_prev_task_mycfs,
 
-#ifdef CONFIG_SMP
-	.select_task_rq		= select_task_rq_mycfs,
-#endif
+	.yield_task			= yield_task_mycfs,
+	.yield_to_task		= yield_to_task_mycfs,
+
+// #ifdef CONFIG_SMP
+// 	.select_task_rq		= select_task_rq_mycfs,
+// #endif
 
 	.set_curr_task      = set_curr_task_mycfs,
 	.task_tick			= task_tick_mycfs,
+	.task_fork			= task_fork_mycfs,
 
 	.get_rr_interval	= get_rr_interval_mycfs,
 
 	.prio_changed		= prio_changed_mycfs,
 	.switched_to		= switched_to_mycfs,
-
+	.switched_from		= switched_from_mycfs,
 };

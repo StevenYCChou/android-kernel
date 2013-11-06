@@ -4059,10 +4059,13 @@ __setscheduler(struct rq *rq, struct task_struct *p, int policy, int prio)
 	p->normal_prio = normal_prio(p);
 	/* we are holding p->pi_lock already */
 	p->prio = rt_mutex_getprio(p);
+
 	if (rt_prio(p->prio))
 		p->sched_class = &rt_sched_class;
 	else if (policy == 6){
+		printk("__setscheduler pid: %d, policy: %d\n", p->pid, p->policy);
 		p->sched_class = &mycfs_sched_class;
+		printk("__setscheduler after set class successfully pid: %d, policy: %d\n", p->pid, p->policy);
 	}
 	else
 		p->sched_class = &fair_sched_class;
@@ -4096,6 +4099,8 @@ static int __sched_setscheduler(struct task_struct *p, int policy,
 	const struct sched_class *prev_class;
 	struct rq *rq;
 	int reset_on_fork;
+
+	printk("__sched_setscheduler called pid: %d, policy: %d\n", p->pid, policy);
 
 	/* may grab non-irq protected spin_locks */
 	BUG_ON(in_interrupt());
@@ -4228,6 +4233,8 @@ recheck:
 
 	oldprio = p->prio;
 	prev_class = p->sched_class;
+
+	printk("__sched_setscheduler before __setscheduler pid: %d, policy: %d\n", p->pid, policy);
 	__setscheduler(rq, p, policy, param->sched_priority);
 
 	if (running)
@@ -4254,6 +4261,8 @@ recheck:
 int sched_setscheduler(struct task_struct *p, int policy,
 		       const struct sched_param *param)
 {
+	printk("sched_setscheduler called \n");
+
 	return __sched_setscheduler(p, policy, param, true);
 }
 EXPORT_SYMBOL_GPL(sched_setscheduler);
@@ -4282,6 +4291,8 @@ do_sched_setscheduler(pid_t pid, int policy, struct sched_param __user *param)
 	struct task_struct *p;
 	int retval;
 
+	printk("do_sched_setscheduler called \n");
+
 	if (!param || pid < 0)
 		return -EINVAL;
 	if (copy_from_user(&lparam, param, sizeof(struct sched_param)))
@@ -4309,6 +4320,8 @@ SYSCALL_DEFINE3(sched_setscheduler, pid_t, pid, int, policy,
 	/* negative values for policy are not valid */
 	if (policy < 0)
 		return -EINVAL;
+
+	printk("sched_setscheduler syscall called \n");
 
 	return do_sched_setscheduler(pid, policy, param);
 }
