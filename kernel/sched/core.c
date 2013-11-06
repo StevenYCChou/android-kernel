@@ -1733,7 +1733,6 @@ static void __sched_fork(struct task_struct *p)
 	p->se.vruntime			= 0;
 	INIT_LIST_HEAD(&p->se.group_node);
 
-
 	//my_se reset values
 	p->my_se.on_rq			= 0;
 	p->my_se.exec_start		= 0;
@@ -1759,7 +1758,7 @@ void sched_fork(struct task_struct *p)
 {
 	unsigned long flags;
 	int cpu = get_cpu();
-
+	if (p->policy == 6) printk("***sched_fork is called %pa\n", p);
 	__sched_fork(p);
 	/*
 	 * We mark the process as running here. This guarantees that
@@ -1772,7 +1771,10 @@ void sched_fork(struct task_struct *p)
 	 * Make sure we do not leak PI boosting priority to the child.
 	 */
 	p->prio = current->normal_prio;
-
+	if(p->policy == 6){
+		p->sched_reset_on_fork = 0;
+		printk("*** in sched_fork() \n");
+	}
 	/*
 	 * Revert to default priority/policy on fork if requested.
 	 */
@@ -1781,7 +1783,8 @@ void sched_fork(struct task_struct *p)
 			p->policy = SCHED_NORMAL;
 			p->static_prio = NICE_TO_PRIO(0);
 			p->rt_priority = 0;
-		} else if (PRIO_TO_NICE(p->static_prio) < 0)
+		} 
+		else if (PRIO_TO_NICE(p->static_prio) < 0)
 			p->static_prio = NICE_TO_PRIO(0);
 
 		p->prio = p->normal_prio = __normal_prio(p);
@@ -1794,7 +1797,7 @@ void sched_fork(struct task_struct *p)
 		p->sched_reset_on_fork = 0;
 	}
 
-	if (!rt_prio(p->prio))
+	if (!rt_prio(p->prio) && p->policy != 6)
 		p->sched_class = &fair_sched_class;
 
 	if (p->sched_class->task_fork)
