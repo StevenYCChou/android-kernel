@@ -4110,8 +4110,6 @@ static int __sched_setscheduler(struct task_struct *p, int policy,
 	struct rq *rq;
 	int reset_on_fork;
 
-	int i=0;
-
 	/* may grab non-irq protected spin_locks */
 	BUG_ON(in_interrupt());
 recheck:
@@ -4247,8 +4245,6 @@ recheck:
 
 	if(policy == 6){
 	printk("***In __setscheduler \n");
-	for(i=0;i<1000;i++)
-		printk("                                                                       \n");
 	}
 	
 

@@ -113,6 +113,8 @@ static int select_task_rq_mycfs(task_struct_t *p, sd_flag_t, flag_t);
 
 void init_mycfs_rq(mycfs_rq_t *mycfs_rq)
 {
+	printk("*** init_mycfs is call, this is @@@1 try\n");
+
 	mycfs_rq->tasks_timeline = RB_ROOT;
 	mycfs_rq->nr_running = 0;
 	mycfs_rq->min_vruntime = (u64)(-(1LL << 20));
@@ -576,10 +578,9 @@ static void set_curr_task_mycfs(rq_t *rq)
 	sched_mycfs_entity_t *my_se = &rq->curr->my_se;
 	mycfs_rq_t *mycfs_rq = mycfs_rq_of(my_se); //maybe can change to rq->mycfs_rq
 
-	int i;
+	
 	printk("***In set_curr_task_mycfs \n");
-	for(i=0;i<1000;i++)
-		printk("                                                                       \n");
+	
 
 	set_next_entity(mycfs_rq, my_se);
 }
