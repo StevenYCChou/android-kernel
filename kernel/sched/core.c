@@ -1721,6 +1721,9 @@ int wake_up_state(struct task_struct *p, unsigned int state)
  */
 static void __sched_fork(struct task_struct *p)
 {
+	if (p->policy == 6)
+		printk("***** sched_fork is called.\n");
+
 	p->on_rq			= 0;
 
 	p->se.on_rq			= 0;
@@ -1730,6 +1733,13 @@ static void __sched_fork(struct task_struct *p)
 	p->se.nr_migrations		= 0;
 	p->se.vruntime			= 0;
 	INIT_LIST_HEAD(&p->se.group_node);
+
+	//my_se initialization
+	p->my_se.on_rq			= 0;
+	p->my_se.exec_start		= 0;
+	p->my_se.sum_exec_runtime		= 0;
+	p->my_se.prev_sum_exec_runtime	= 0;
+	p->my_se.vruntime			= 0;
 
 #ifdef CONFIG_SCHEDSTATS
 	memset(&p->se.statistics, 0, sizeof(p->se.statistics));

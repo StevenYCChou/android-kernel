@@ -109,11 +109,14 @@ __update_curr(mycfs_rq_t *mycfs_rq, sched_mycfs_entity_t *curr, unsigned long de
 
 }
 */
+/*
 static void update_curr(mycfs_rq_t *mycfs_rq)
 {
 	sched_mycfs_entity_t *curr = mycfs_rq->curr;
 	u64 now = rq_of(mycfs_rq)->clock_task;
 	unsigned long delta_exec;
+
+	printk("*** update_curr is called.\n");
 
 	if (unlikely(!curr))
 		return;
@@ -125,7 +128,10 @@ static void update_curr(mycfs_rq_t *mycfs_rq)
 	//__update_curr(mycfs_rq, curr, delta_exec);
 	curr->exec_start = now;
 
+	printk("*** update_curr is end.\n");
+
 }
+*/
 
 /*
  * mycfs-task scheduling class.
@@ -155,9 +161,8 @@ static void
 enqueue_mycfs_entity(mycfs_rq_t *mycfs_rq, sched_mycfs_entity_t *my_se, int flags){
 	if (!(flags & ENQUEUE_WAKEUP) || (flags & ENQUEUE_WAKING))
 		my_se->vruntime += mycfs_rq->min_vruntime;
-	update_curr(mycfs_rq);
+		//update_curr(mycfs_rq);
 
-	printk("*** enqueue_mycfs_entity is called, after update_curr\n");
 
 
 	// if(flags & ENQUEUE_WAKEUP){
@@ -169,6 +174,8 @@ enqueue_mycfs_entity(mycfs_rq_t *mycfs_rq, sched_mycfs_entity_t *my_se, int flag
 	// }
 	
 	my_se->on_rq = 1;
+	printk("*** enqueue_mycfs_entity is called, after update_curr, vruntime: %llu, on_rq: %d \n", 
+		my_se->vruntime, (int) my_se->on_rq);
 }
 
 
@@ -202,10 +209,42 @@ static void dequeue_task_mycfs(struct rq *rq, struct task_struct *p, int flags)
 	// raw_spin_lock_irq(&rq->lock);
 }
 
-static void put_prev_task_mycfs(struct rq *rq, struct task_struct *prev)
+
+static void put_prev_entity(mycfs_rq_t *mycfs_rq, sched_mycfs_entity_t *prev)
 {
-	printk("*** put_prev_task_mycfs is called, pid: %d \n",prev->pid);
+	/*
+	 * If still on the runqueue then deactivate_task()
+	 * was not called and update_curr() has to be done:
+	 */
+
+	printk("*** put_prev_entity is called.\n");
+	if (prev->on_rq) {
+		printk("*** put_prev_entity on_rq is true.\n");
+		//update_curr(mycfs_rq);
+		/* Put 'current' back into the tree. */
+		//__enqueue_entity(mycfs_rq, prev);
+	}
+	mycfs_rq->curr = NULL;
+	printk("*** put_prev_entity ended.\n");
 }
+
+/*
+ * Account for a descheduled task:
+ */
+static void put_prev_task_mycfs(rq_t *rq, task_struct_t *prev)
+{
+	
+
+	sched_mycfs_entity_t *my_se = &prev->my_se;
+	mycfs_rq_t *mycfs_rq = mycfs_rq_of(my_se);
+
+	printk("*** put_prev_task_mycfs is called, pid: %d \n",prev->pid);
+
+	put_prev_entity(mycfs_rq, my_se);
+
+	printk("*** put_prev_task_mycfs is ended, pid: %d \n",prev->pid);
+}
+
 
 static void task_tick_mycfs(struct rq *rq, struct task_struct *curr, int queued)
 {
@@ -254,6 +293,8 @@ static unsigned int get_rr_interval_mycfs(struct rq *rq, struct task_struct *tas
 
 void init_mycfs_rq(struct mycfs_rq *mycfs_rq)
 {
+	printk("*** init_mycfs_rq is called \n");
+
 	mycfs_rq->tasks_timeline = RB_ROOT;
 	mycfs_rq->nr_running = 0;
 	mycfs_rq->min_vruntime = (u64)(-(1LL << 20));
