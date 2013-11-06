@@ -19,6 +19,9 @@ unsigned int mycfs_sysctl_sched_min_granularity = 750000ULL;
 // default sched latency of a process: 6ms
 unsigned int mycfs_sysctl_sched_latency = 6000000ULL;
 
+// if curr->vruntime > se->vruntime for this amount, then this se can preempt curr  
+unsigned int mycfs_sysctl_sched_wakeup_granularity = 1000000UL;
+
 // if more than sched_nr_latency process is in mycfs scheduler, replace default __sched_period
 static unsigned int sched_nr_latency = 8;
 
@@ -56,7 +59,7 @@ static void put_prev_task_mycfs(rq_t*, task_struct_t*);
 static void put_prev_entity(mycfs_rq_t*, sched_mycfs_entity_t*);
 
 static task_struct_t* pick_next_task_mycfs(rq_t*);
-static inline sched_mycfs_entity_t* pick_next_entity(cfs_rq_t*);
+static inline sched_mycfs_entity_t* pick_next_entity(mycfs_rq_t*);
 static void set_next_entity(mycfs_rq_t*, sched_mycfs_entity_t*);
 
 static void task_fork_mycfs(task_struct_t*);
@@ -68,11 +71,13 @@ static void enqueue_mycfs_entity(mycfs_rq_t*, sched_mycfs_entity_t*, flag_t);
 static void __enqueue_entity(mycfs_rq_t*, sched_mycfs_entity_t*);
 
 static void check_preempt_wakeup_mycfs(rq_t*, task_struct_t*, flag_t);
+static int wakeup_preempt_entity(sched_mycfs_entity_t*, sched_mycfs_entity_t*);
 
 /*other function*/
 static void set_curr_task_mycfs(rq_t*);
 static void switched_to_mycfs(rq_t*, task_struct_t*);
 static void yield_task_mycfs(rq_t*);
+static bool yield_to_task_mycfs(rq_t*, task_struct_t*, bool);
 
 /*empty function*/
 static unsigned int get_rr_interval_mycfs(rq_t*, task_struct_t*);
@@ -90,7 +95,7 @@ static inline mycfs_rq_t* mycfs_rq_of(sched_mycfs_entity_t*);
 static u64 __sched_period(unsigned long);
 static u64 sched_slice(mycfs_rq_t*, sched_mycfs_entity_t*);
 
-static unsigned long calc_delta(unsigned long delta_exec, unsigned long weight, struct load_weight *lw);
+//static unsigned long calc_delta(unsigned long delta_exec, unsigned long weight, struct load_weight *lw);
 
 static inline int entity_before(sched_mycfs_entity_t*, sched_mycfs_entity_t*);
 
@@ -134,25 +139,26 @@ static inline mycfs_rq_t *mycfs_rq_of(sched_mycfs_entity_t *my_se)
 	return my_se->mycfs_rq;
 }
 
-static inline sched_mycfs_entity_t* pick_next_entity(cfs_rq_t* mycfs_rq){
+static inline sched_mycfs_entity_t* pick_next_entity(mycfs_rq_t* mycfs_rq){
 	return __pick_first_mycfs_entity(mycfs_rq);
 }
 
 static task_struct_t *pick_next_task_mycfs(rq_t *rq)
 {   
-	struct task_struct *p;
+	
+	struct rb_node *left = rq->mycfs.rb_leftmost;
 	mycfs_rq_t* mycfs_rq = &(rq->mycfs);
-	sched_my_entity_t* my_se;
+	sched_mycfs_entity_t* my_se;
 
-	if (!cfs_rq->nr_running)
+	if (!mycfs_rq->nr_running)
 		return NULL;
 
-    struct rb_node *left = rq->mycfs.rb_leftmost;
+    
     if (!left) {
         return NULL;
 	}
 
-    my_se = pick_next_mycfs_entity(mycfs_rq);
+    my_se = pick_next_entity(mycfs_rq);
     set_next_entity(mycfs_rq, my_se);
 
     return task_of(my_se);
@@ -438,7 +444,7 @@ static void check_preempt_tick(mycfs_rq_t *mycfs_rq, sched_mycfs_entity_t *curr)
 {
 	unsigned long ideal_runtime, delta_exec;
 	sched_mycfs_entity_t *my_se;
-	u64 now = rq_of(mycfs_rq)->clock_task;
+	
 	s64 delta;
 
 	ideal_runtime = sched_slice(mycfs_rq, curr);
@@ -509,7 +515,7 @@ static void set_next_entity(mycfs_rq_t *mycfs_rq, sched_mycfs_entity_t *my_se)
 	update_stats_curr_start(mycfs_rq, my_se);
 	mycfs_rq->curr = my_se;
 
-	se->prev_sum_exec_runtime = se->sum_exec_runtime;
+	my_se->prev_sum_exec_runtime = my_se->sum_exec_runtime;
 }
 
 static void set_curr_task_mycfs(rq_t *rq)
@@ -544,17 +550,29 @@ static void switched_to_mycfs(rq_t *rq, task_struct_t *p)
 static void check_preempt_wakeup_mycfs(rq_t *rq, task_struct_t *p, int wake_flags)
 {
 	task_struct_t *curr = rq->curr;
-	sched_mycfs_entity_t *my_se = &curr->my_se, *pse = &p->my_se;
+	sched_mycfs_entity_t *curr_my_se = &curr->my_se, *p_my_se = &p->my_se;
 	
-	if (unlikely(my_se == pse))
+	if (unlikely(curr_my_se == p_my_se))
 		return;
 
+	/*
+	 * We can come here with TIF_NEED_RESCHED already set from new task
+	 * wake up path.
+	 *
+	 * Note: this also catches the edge-case of curr being in a throttled
+	 * group (e.g. via set_curr_task), since update_curr() (in the
+	 * enqueue of curr) will have resulted in resched being set.  This
+	 * prevents us from potentially nominating it as a false LAST_BUDDY
+	 * below.
+	 */
 	if (test_tsk_need_resched(curr))
 		return;
 
+	/* Idle tasks are by definition preempted by non-idle tasks. */
 	if (unlikely(curr->policy == SCHED_IDLE) &&
-		likely(p->policy != SCHED_IDLE))
-		resched_task(curr);
+	    likely(p->policy != SCHED_IDLE))
+		goto preempt;
+
 	/*
 	 * Batch and idle tasks do not preempt non-idle tasks (their preemption
 	 * is driven by the tick):
@@ -562,12 +580,47 @@ static void check_preempt_wakeup_mycfs(rq_t *rq, task_struct_t *p, int wake_flag
 	if (unlikely(p->policy != SCHED_MYCFS))
 		return;
 
-	update_curr(mycfs_rq_of(my_se));
+	//find_matching_se(&se, &pse);
+	update_curr(mycfs_rq_of(curr_my_se));
+	//BUG_ON(!pse);
+	if (wakeup_preempt_entity(curr_my_se, p_my_se) == 1) {
+		/*
+		 * Bias pick_next to pick the sched entity that is
+		 * triggering this preemption.
+		 */
+		//if (!next_buddy_marked)
+		//	set_next_buddy(pse);
+		goto preempt;
+	}
+
+	return;
+
+preempt:
+	resched_task(curr);
+	/*
+	 * Only set the backward buddy when the current task is still
+	 * on the rq. This can happen when a wakeup gets interleaved
+	 * with schedule on the ->pre_schedule() or idle_balance()
+	 * point, either of which can * drop the rq lock.
+	 *
+	 * Also, during early boot the idle thread is in the fair class,
+	 * for obvious reasons its a bad idea to schedule back to it.
+	 */
+	if (unlikely(!curr_my_se->on_rq || curr == rq->idle))
+		return;
 }
 
 static int wakeup_preempt_entity(sched_mycfs_entity_t* curr, sched_mycfs_entity_t* se)
 {
-	return 0; 
+	s64 vdiff = curr->vruntime - se->vruntime;
+
+	if (vdiff <= 0)
+		return -1;
+
+	if (vdiff > mycfs_sysctl_sched_wakeup_granularity)
+		return 1;
+
+	return 0;
 }
 
 static void prio_changed_mycfs(rq_t *rq, task_struct_t *p, prio_t oldprio)
@@ -626,8 +679,31 @@ static void yield_task_mycfs(rq_t *rq){
 	rq->skip_clock_update = 1;
 }
 
-static void switched_from_mycfs(rq_t *rq, task_struct_t *p){
+static bool yield_to_task_mycfs(rq_t* rq, task_struct_t *p, bool preempt){
+	return true;
+}
 
+static void switched_from_mycfs(rq_t *rq, task_struct_t *p){
+	sched_mycfs_entity_t *my_se = &p->my_se;
+	mycfs_rq_t *mycfs_rq = mycfs_rq_of(my_se);
+
+	/*
+	 * Ensure the task's vruntime is normalized, so that when its
+	 * switched back to the fair class the enqueue_entity(.flags=0) will
+	 * do the right thing.
+	 *
+	 * If it was on_rq, then the dequeue_entity(.flags=0) will already
+	 * have normalized the vruntime, if it was !on_rq, then only when
+	 * the task is sleeping will it still have non-normalized vruntime.
+	 */
+	if (!my_se->on_rq && p->state != TASK_RUNNING) {
+		/*
+		 * Fix up our vruntime so that the current sleep doesn't
+		 * cause 'unlimited' sleep bonus.
+		 */
+		place_entity(mycfs_rq, my_se, 0);
+		my_se->vruntime -= mycfs_rq->min_vruntime;
+	}
 }
 
 #ifdef CONFIG_SMP
@@ -646,6 +722,7 @@ const sched_class_t mycfs_sched_class = {
 	.put_prev_task		= put_prev_task_mycfs,
 
 	.yield_task			= yield_task_mycfs,
+	.yield_to_task		= yield_to_task_mycfs,
 
 #ifdef CONFIG_SMP
 	.select_task_rq		= select_task_rq_mycfs,

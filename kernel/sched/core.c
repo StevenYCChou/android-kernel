@@ -4059,9 +4059,12 @@ __setscheduler(struct rq *rq, struct task_struct *p, int policy, int prio)
 	p->normal_prio = normal_prio(p);
 	/* we are holding p->pi_lock already */
 	p->prio = rt_mutex_getprio(p);
-    if (p->policy == 6)
-        p->sched_class = &mycfs_sched_class;
-    if (rt_prio(p->prio))
+    
+    if(p->policy == 6){
+    	printk("In __setscheduler bf p->sched_class to ours\n");
+		p->sched_class = &mycfs_sched_class;
+	}
+    else if (rt_prio(p->prio))
 		p->sched_class = &rt_sched_class;
 	else
 		p->sched_class = &fair_sched_class;
@@ -4281,6 +4284,10 @@ do_sched_setscheduler(pid_t pid, int policy, struct sched_param __user *param)
 	struct task_struct *p;
 	int retval;
 
+	//if(policy == 6)
+		//printk("#####In do_sched_setscheduler, pid: %d, policy: %d\n", pid, policy);
+	
+	
 	if (!param || pid < 0)
 		return -EINVAL;
 	if (copy_from_user(&lparam, param, sizeof(struct sched_param)))
@@ -4289,6 +4296,9 @@ do_sched_setscheduler(pid_t pid, int policy, struct sched_param __user *param)
 	rcu_read_lock();
 	retval = -ESRCH;
 	p = find_process_by_pid(pid);
+
+	
+
 	if (p != NULL)
 		retval = sched_setscheduler(p, policy, &lparam);
 	rcu_read_unlock();
@@ -4308,6 +4318,9 @@ SYSCALL_DEFINE3(sched_setscheduler, pid_t, pid, int, policy,
 	/* negative values for policy are not valid */
 	if (policy < 0)
 		return -EINVAL;
+
+	if(policy == 6)
+		printk("#####In SYSCALL_DEFINE3, pid: %d, policy: %d \n", pid, policy);
 
 	return do_sched_setscheduler(pid, policy, param);
 }
