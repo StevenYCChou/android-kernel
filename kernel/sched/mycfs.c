@@ -50,26 +50,30 @@ static inline mycfs_rq_t *mycfs_rq_of(sched_mycfs_entity_t *my_se)
 }
 
 static void check_preempt_wakeup_mycfs(rq_t* rq, task_struct_t* p, int wake_flags){
-
+	printk("*** check_preempt_wakeup_mycfs is called \n");
 }
 
 static void yield_task_mycfs(rq_t* rq){
-
+	printk("*** yield_task_mycfs is called \n");
 }
 
 static bool yield_to_task_mycfs(rq_t* rq, task_struct_t* p, bool preempt){
+	printk("*** yield_to_task_mycfs is called \n");
 	return 1;
 }
 
 static void task_fork_mycfs(task_struct_t* p){
+	printk("*** task_fork_mycfs is called \n");
 
 }
 
 static void switched_to_mycfs(rq_t* rq, task_struct_t* p){
+	printk("*** switched_to_mycfs is called \n");
 
 }
 
 static void switched_from_mycfs(rq_t* rq, task_struct_t* p){
+	printk("*** switched_from_mycfs is called \n");
 
 }
 
@@ -97,6 +101,7 @@ static void check_preempt_curr_mycfs(struct rq *rq, struct task_struct *p, int f
 
 static struct task_struct *pick_next_task_mycfs(struct rq *rq)
 {
+	//printk("*** pick_next_task_mycfs is called \n");
 	//schedstat_inc(rq, sched_gomycfs);
 	//calc_load_account_mycfs(rq);
 	//return rq->mycfs;
@@ -105,7 +110,7 @@ static struct task_struct *pick_next_task_mycfs(struct rq *rq)
 
 static void enqueue_task_mycfs(struct rq *rq, struct task_struct *p, int flags)
 {
-	printk("*** Enqueue_task_mycfs is called \n");
+	printk("*** Enqueue_task_mycfs is called, pid: %d \n",p->pid);
 }
 
 /*
@@ -114,7 +119,7 @@ static void enqueue_task_mycfs(struct rq *rq, struct task_struct *p, int flags)
  */
 static void dequeue_task_mycfs(struct rq *rq, struct task_struct *p, int flags)
 {
-	printk("*** Dequeue_task_mycfs is called \n");
+	printk("*** Dequeue_task_mycfs is called, pid: %d \n",p->pid);
 	// raw_spin_unlock_irq(&rq->lock);
 	// printk(KERN_ERR "bad: scheduling from the mycfs thread!\n");
 	// dump_stack();
@@ -123,11 +128,12 @@ static void dequeue_task_mycfs(struct rq *rq, struct task_struct *p, int flags)
 
 static void put_prev_task_mycfs(struct rq *rq, struct task_struct *prev)
 {
-	printk("*** put_prev_task_mycfs is called \n");
+	printk("*** put_prev_task_mycfs is called, pid: %d \n",prev->pid);
 }
 
 static void task_tick_mycfs(struct rq *rq, struct task_struct *curr, int queued)
 {
+	printk("*** task_tick_mycfs is called \n");
 }
 
 static void
@@ -160,11 +166,13 @@ static void set_curr_task_mycfs(struct rq *rq)
 
 static void prio_changed_mycfs(struct rq *rq, struct task_struct *p, int oldprio)
 {
+	printk("*** prio_changed_mycfs is called \n");
 	
 }
 
 static unsigned int get_rr_interval_mycfs(struct rq *rq, struct task_struct *task)
 {
+	printk("*** get_rr_interval_mycfs is called \n");
 	return 0;
 }
 
