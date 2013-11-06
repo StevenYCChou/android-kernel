@@ -1734,7 +1734,7 @@ static void __sched_fork(struct task_struct *p)
 	INIT_LIST_HEAD(&p->se.group_node);
 
 
-	//my_se initialization
+	//my_se reset values
 	p->my_se.on_rq			= 0;
 	p->my_se.exec_start		= 0;
 	p->my_se.sum_exec_runtime		= 0;

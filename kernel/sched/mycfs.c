@@ -502,6 +502,41 @@ sched_mycfs_entity_t *__pick_first_mycfs_entity(mycfs_rq_t *mycfs_rq)
 }
 */
 
+static void print_my_se_info(sched_mycfs_entity_t *my_se, char* name){
+	printk("Values in %s my_se: pid = %d, policy = %d, on_rq = %d, \n\texec_start = %llu, vruntime = %llu, \n\ts_exe_rtime = %llu, pre_s_exe_rtime = %llu\n", 
+		name, task_of(my_se)->pid,task_of(my_se)->policy, my_se->on_rq, my_se->exec_start, my_se->vruntime, my_se->sum_exec_runtime, my_se->prev_sum_exec_runtime);
+
+}
+
+
+
+static void print_it_all(mycfs_rq_t *mycfs_rq, sched_mycfs_entity_t *curr, char* callee){
+
+
+	struct rb_node *node;
+
+	printk("=================print_it_all start===================\n");
+	printk("Caller: %s\n", callee);
+	printk("Mycfs_rq info: nr_running = %lu, min_vrtime = %llu, \n\ttasks_timeline = %pa, rb_leftmost = %pa, \n\tcurr = %pa\n",
+		mycfs_rq->nr_running, mycfs_rq->min_vruntime, &mycfs_rq->tasks_timeline, mycfs_rq->rb_leftmost, mycfs_rq->curr);
+	
+	
+	print_my_se_info(curr, "Curr");
+
+	printk("Start to print rb tree:\n");
+
+    for (node = rb_first(&mycfs_rq->tasks_timeline); node; node = rb_next(node)){
+        printk("pid: %d vruntime: %llu\n", 
+        	task_of(rb_entry(node, sched_mycfs_entity_t, run_node))->pid, 
+        	rb_entry(node, sched_mycfs_entity_t, run_node)->vruntime);
+        //print_my_se_info(); //substitude with this if you need more info
+    }
+
+    printk("=================print_it_all end===================\n");
+}
+
+
+
 /*
  * Preempt the current task with a newly woken task if needed:
  */
@@ -547,9 +582,11 @@ static void check_preempt_tick(mycfs_rq_t *mycfs_rq, sched_mycfs_entity_t *curr)
 	if (delta > ideal_runtime)
 		resched_task(rq_of(mycfs_rq)->curr);
 
-	printk("***In check_preempt_tick is end. \n");
+	
 
-	print_it_all(mycfs_rq, curr);
+	
+
+	printk("***In check_preempt_tick is end. \n");
 }
 
 static void
@@ -571,6 +608,8 @@ static void task_tick_mycfs(rq_t* rq, task_struct_t* curr, int queued)
 
 	printk("***In task_tick_mycfs is called. \n");
 	entity_tick(mycfs_rq, my_se, queued);
+
+	print_it_all(&rq->mycfs, &curr->my_se, "task_tick_mycfs");
 	printk("***In task_tick_mycfs is end. \n");
 }
 
@@ -634,6 +673,10 @@ static void set_curr_task_mycfs(rq_t *rq)
  */
 static void switched_to_mycfs(rq_t *rq, task_struct_t *p)
 {
+	//initialize mycfs_rq of my_se
+	p->my_se.mycfs_rq = &rq->mycfs;
+
+
 	if (!p->my_se.on_rq)
 		return;
 
@@ -701,17 +744,8 @@ static void check_preempt_wakeup_mycfs(rq_t *rq, task_struct_t *p, int wake_flag
 
 preempt:
 	resched_task(curr);
-	/*
-	 * Only set the backward buddy when the current task is still
-	 * on the rq. This can happen when a wakeup gets interleaved
-	 * with schedule on the ->pre_schedule() or idle_balance()
-	 * point, either of which can * drop the rq lock.
-	 *
-	 * Also, during early boot the idle thread is in the fair class,
-	 * for obvious reasons its a bad idea to schedule back to it.
-	 */
-	if (unlikely(!curr_my_se->on_rq || curr == rq->idle))
-		return;
+	
+	print_it_all(&rq->mycfs, &curr->my_se, "check_preempt_wakeup_mycfs");
 }
 
 static int wakeup_preempt_entity(sched_mycfs_entity_t* curr, sched_mycfs_entity_t* se)
