@@ -359,8 +359,12 @@ place_entity(mycfs_rq_t *mycfs_rq, sched_mycfs_entity_t *my_se, int initial)
 
 static void 
 enqueue_mycfs_entity(mycfs_rq_t *mycfs_rq, sched_mycfs_entity_t *my_se, int flags){
-	if (!(flags & ENQUEUE_WAKEUP) || (flags & ENQUEUE_WAKING))
+	/*
+	if (!(flags & ENQUEUE_WAKEUP) || (flags & ENQUEUE_WAKING)){
 		my_se->vruntime += mycfs_rq->min_vruntime;
+		printk("***In enqueue_mycfs_entity(): vruntime = %llu\n", my_se->vruntime);
+	}
+	*/
 	update_curr(mycfs_rq);
 
 	if(flags & ENQUEUE_WAKEUP){
@@ -379,16 +383,16 @@ static void enqueue_task_mycfs(rq_t *rq, task_struct_t *p, int flags)
 	
 	mycfs_rq_t *mycfs_rq = &(rq->mycfs);
 	sched_mycfs_entity_t *my_se = &p -> my_se;
-	printk("***In enqueue_task_mycfs is called. \n");
+	printk("***Enqueue_task_mycfs is called. pid = %d \n", p->pid);
 
 	enqueue_mycfs_entity(mycfs_rq, my_se, flags);
 
-	printk("***In enqueue_task_mycfs(), before nr++: mycfs_rq = %pa, p = %pa is enqueued, mycfs_rq->nr_running = %lu.\n",mycfs_rq, p, mycfs_rq->nr_running);
+//	printk("***In enqueue_task_mycfs(), before nr++: mycfs_rq = %pa, p = %pa is enqueued, mycfs_rq->nr_running = %lu.\n",mycfs_rq, p, mycfs_rq->nr_running);
 
 	mycfs_rq->nr_running++;
 
-	printk("***In enqueue_task_mycfs(), after nr++: mycfs_rq = %pa, p = %pa is enqueued, mycfs_rq->nr_running = %lu.\n",mycfs_rq, p, mycfs_rq->nr_running);
-	printk("***In enqueue_task_mycfs is end. \n");
+//	printk("***In enqueue_task_mycfs(), after nr++: mycfs_rq = %pa, p = %pa is enqueued, mycfs_rq->nr_running = %lu.\n",mycfs_rq, p, mycfs_rq->nr_running);
+//	printk("***In enqueue_task_mycfs is end. \n");
 
 }
 
@@ -406,7 +410,8 @@ static void __dequeue_entity(mycfs_rq_t *mycfs_rq, sched_mycfs_entity_t *my_se)
 static void
 dequeue_mycfs_entity(mycfs_rq_t *mycfs_rq, sched_mycfs_entity_t *my_se, int flags)
 {
-	
+	printk("***Dequeue_mycfs_entity(): pid=%d, vruntime= %llu\n", task_of(my_se)->pid, my_se->vruntime);
+
 	update_curr(mycfs_rq);
 
 	if (my_se != mycfs_rq->curr)
@@ -418,9 +423,11 @@ dequeue_mycfs_entity(mycfs_rq_t *mycfs_rq, sched_mycfs_entity_t *my_se, int flag
 	 * update can refer to the ->curr item and we need to reflect this
 	 * movement in our normalized position.
 	 */
-	if (!(flags & DEQUEUE_SLEEP))
-		my_se->vruntime -= mycfs_rq->min_vruntime;
-
+	if (!(flags & DEQUEUE_SLEEP)){
+		//my_se->vruntime -= mycfs_rq->min_vruntime;
+		printk("***In dequeue_mycfs_entity() -= : pid=%d, vruntime= %llu\n", 
+			task_of(my_se)->pid, my_se->vruntime);
+	}
 	update_min_vruntime(mycfs_rq);
 }
 
@@ -429,14 +436,14 @@ static void dequeue_task_mycfs(rq_t *rq, task_struct_t *p, flag_t flags)
 	mycfs_rq_t *mycfs_rq = &(rq->mycfs);
 	sched_mycfs_entity_t *my_se = &p->my_se;
 
-	printk("***In dequeue_task_mycfs is called. \n");
+	printk("***Enqueue_task_mycfs is called. pid = %d \n", p->pid);
 
 	dequeue_mycfs_entity(mycfs_rq, my_se, flags);
 	printk("***In dequeue_task_mycfs(), before nr--: mycfs_rq = %pa, p = %pa is dequeued, mycfs_rq->nr_running = %lu.\n",mycfs_rq, p, mycfs_rq->nr_running);
 	--mycfs_rq->nr_running;
-	printk("***In dequeue_task_mycfs(), after nr--: mycfs_rq = %pa, p = %pa is dequeued, mycfs_rq->nr_running = %lu.\n",mycfs_rq, p, mycfs_rq->nr_running);
+	//printk("***In dequeue_task_mycfs(), after nr--: mycfs_rq = %pa, p = %pa is dequeued, mycfs_rq->nr_running = %lu.\n",mycfs_rq, p, mycfs_rq->nr_running);
 	
-	printk("***In dequeue_task_mycfs is end. \n");
+	//printk("***In dequeue_task_mycfs is end. \n");
 
 }
 
@@ -523,8 +530,8 @@ static void print_it_all(mycfs_rq_t *mycfs_rq, sched_mycfs_entity_t *curr, char*
 
 	printk("=================print_it_all start===================\n");
 	//printk("Caller: %s\n", callee);
-	//printk("Mycfs_rq info: nr_running = %lu, min_vrtime = %llu, \n\ttasks_timeline = %pa, rb_leftmost = %pa, \n\tcurr = %pa\n",
-	//	mycfs_rq->nr_running, mycfs_rq->min_vruntime, &mycfs_rq->tasks_timeline, mycfs_rq->rb_leftmost, mycfs_rq->curr);
+	printk("Mycfs_rq info: nr_running = %lu, min_vrtime = %llu, \n\ttasks_timeline = %pa, rb_leftmost = %pa, \n\tcurr = %pa\n",
+		mycfs_rq->nr_running, mycfs_rq->min_vruntime, &mycfs_rq->tasks_timeline, mycfs_rq->rb_leftmost, mycfs_rq->curr);
 	
 	
 	//print_my_se_info(curr, "Curr");
@@ -814,7 +821,7 @@ static void task_fork_mycfs(task_struct_t *p)
 
 	place_entity(mycfs_rq, my_se, 1);
 
-	my_se->vruntime -= mycfs_rq->min_vruntime;
+	//my_se->vruntime -= mycfs_rq->min_vruntime;
 
 	raw_spin_unlock_irqrestore(&rq->lock, flags);
 }
