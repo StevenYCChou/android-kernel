@@ -16,6 +16,9 @@
  */
 unsigned int mycfs_sysctl_sched_min_granularity = 750000ULL;
 
+// default sched period: 100ms
+unsigned int mycfs_limit_period = 100000000ULL;
+
 // default sched latency of a process: 6ms
 unsigned int mycfs_sysctl_sched_latency = 6000000ULL;
 
@@ -116,8 +119,7 @@ void init_mycfs_rq(mycfs_rq_t *mycfs_rq, rq_t* rq)
 	//printk("*** init_mycfs is call, this is @@@1 try\n");
 	printk("***The address of rq in init_mycfs_rq:  %d, %pa\n", (int)rq, rq);
 	mycfs_rq->rq = rq;
-
-	printk("***The address mycfs_rq->rq in init_mycfs_rq:  %d, %pa\n", (int)mycfs_rq->rq, mycfs_rq->rq);
+	mycfs_rq->limit_period = mycfs_limit_period;
 	mycfs_rq->tasks_timeline = RB_ROOT;
 	mycfs_rq->nr_running = 0;
 	mycfs_rq->min_vruntime = (u64)(-(1LL << 20));

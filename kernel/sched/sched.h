@@ -275,6 +275,7 @@ struct cfs_rq {
 };
 
 struct mycfs_rq {
+	u64 period;
     unsigned long nr_running;
     u64 min_vruntime;
 
