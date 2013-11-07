@@ -12,18 +12,18 @@
 
 /*
  * Minimal preemption granularity for CPU-bound tasks:
- * (default: 0.75 msec * (1 + ilog(ncpus)), units: nanoseconds)
+ * (default: 1 msec * (1 + ilog(ncpus)), units: nanoseconds)
  */
-unsigned int mycfs_sysctl_sched_min_granularity = 750000ULL;
+unsigned int mycfs_sysctl_sched_min_granularity = 1000000ULL;
 
-// default sched latency of a process: 6ms
-unsigned int mycfs_sysctl_sched_latency = 6000000ULL;
+// default sched latency of a process: 10ms
+unsigned int mycfs_sysctl_sched_latency = 10000000ULL;
 
 // if curr->vruntime > se->vruntime for this amount, then this se can preempt curr  
 unsigned int mycfs_sysctl_sched_wakeup_granularity = 1000000UL;
 
 // if more than sched_nr_latency process is in mycfs scheduler, replace default __sched_period
-static unsigned int sched_nr_latency = 8;
+static unsigned int sched_nr_latency = 10;
 
 typedef int sd_flag_t;
 typedef int flag_t;
