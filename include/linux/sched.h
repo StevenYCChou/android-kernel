@@ -1243,6 +1243,10 @@ struct sched_mycfs_entity {
 	u64			sum_exec_runtime;
 	u64			prev_sum_exec_runtime;
 	struct mycfs_rq *mycfs_rq;
+
+	//used for sched_setlimit
+	struct list_head limited_list;
+
 };
 
 struct sched_rt_entity {
