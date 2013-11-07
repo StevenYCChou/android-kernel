@@ -161,6 +161,7 @@ extern struct cred init_cred;
 	},								\
 	.my_se		= {					\
 		.sched_limit = 100,			\
+		.limited_list = LIST_HEAD_INIT(my_se.limited_list),  \
 	},								\
 	.tasks		= LIST_HEAD_INIT(tsk.tasks),			\
 	INIT_PUSHABLE_TASKS(tsk)					\

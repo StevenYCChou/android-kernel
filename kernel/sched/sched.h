@@ -282,6 +282,8 @@ struct mycfs_rq {
     struct rb_root tasks_timeline;
     struct rb_node *rb_leftmost;
 
+    static LIST_HEAD(limited_list);
+
     /*
      * 'curr' points to currently running entity on this cfs_rq.
      * It is set to NULL otherwise (i.e when none are currently running).

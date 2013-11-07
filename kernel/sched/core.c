@@ -1739,6 +1739,7 @@ static void __sched_fork(struct task_struct *p)
 	p->my_se.sum_exec_runtime		= 0;
 	p->my_se.prev_sum_exec_runtime	= 0;
 	p->my_se.vruntime			= 0;
+	INIT_LIST_HEAD(&p->my_se.limited_list);
 
 #ifdef CONFIG_SCHEDSTATS
 	memset(&p->se.statistics, 0, sizeof(p->se.statistics));
