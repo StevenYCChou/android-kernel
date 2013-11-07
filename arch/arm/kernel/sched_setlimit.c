@@ -7,6 +7,13 @@
 #include <linux/errno.h>
 #include <linux/pid.h>
 
+
+int sched_setlimit(pid_t pid, int limit);
+
+asmlinkage int sys_sched_setlimit(pid_t pid, int limit) {
+	return sched_setlimit(pid, limit);
+};
+
 int sched_setlimit(pid_t pid, int limit){
 	struct task_struct* p;
 
