@@ -53,6 +53,10 @@ static DEFINE_SPINLOCK(uidhash_lock);
 
 /* root_user.__count is 2, 1 for init task cred, 1 for init_user_ns->user_ns */
 struct user_struct root_user = {
+	//initialization of set_mlimit used filed
+	.mem_quota	= 0,
+	.mem_used	= 0,
+
 	.__count	= ATOMIC_INIT(2),
 	.processes	= ATOMIC_INIT(1),
 	.files		= ATOMIC_INIT(0),
