@@ -124,6 +124,20 @@ gfp_t gfp_allowed_mask __read_mostly = GFP_BOOT_MASK;
 
 static gfp_t saved_gfp_mask;
 
+
+//find all processes for a user
+long used_mem_of_user(uid_t user){
+	struct task_struct *task;
+	long used_mem = 0;
+
+    for_each_process(task){
+    	if(task->real_cred->uid == user)
+    		used_mem += get_mm_rss(task->mm);
+    }
+
+    return 0;
+}
+
 void pm_restore_gfp_mask(void)
 {
 	WARN_ON(!mutex_is_locked(&pm_mutex));
