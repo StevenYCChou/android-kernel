@@ -138,12 +138,6 @@ long used_mem_of_user(uid_t user){
     return used_mem;
 }
 
-//get the process of a user that uses maximum memory
-long max_mem_of_user(uid_t user){
-
-
-} 
-
 void pm_restore_gfp_mask(void)
 {
 	WARN_ON(!mutex_is_locked(&pm_mutex));
@@ -2576,9 +2570,9 @@ __alloc_pages_nodemask(gfp_t gfp_mask, unsigned int order,
 
 	might_sleep_if(gfp_mask & __GFP_WAIT);
 
-	if (used_mem_of_user() > get_current_user()->mem_quota) {
+	if (used_mem_of_user(get_current_user()->uid) > atomic_long_read(&get_current_user()->mem_quota)) {
 		// call oom_kill
-		printk("we used more memory than quota.. used_mem: %lx quota: %lx", used_mem_of_user(), get_current_user()->mem_quota);
+		printk("we used more memory than quota.. used_mem: %lx quota: %lx", used_mem_of_user(get_current_user()->uid), atomic_long_read(&get_current_user()->mem_quota));
 	}
 
 	if (should_fail_alloc_page(gfp_mask, order))
