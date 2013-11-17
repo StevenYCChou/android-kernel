@@ -3,6 +3,7 @@
 #include <linux/types.h>
 #include <linux/sched.h>
 #include <linux/errno.h>
+#include <asm-generic/atomic-long.h>
 
 int set_mlimit(uid_t uid, long mem_max){
 	struct user_struct *user;
@@ -14,10 +15,10 @@ int set_mlimit(uid_t uid, long mem_max){
 	if(user == NULL)
 		return -EINVAL;
 
-	user->mem_quota = mem_max;
+	atomic_long_set(&user->mem_quota, mem_max);
 
 	printk("Set_mlimit succeed, the mem_max of the user %lu is %lu.\n", 
-		(unsigned long)uid, (unsigned long)user->mem_quota);
+		(unsigned long)uid, atomic_long_read(&user->mem_quota));
 
 	free_uid(user);
 

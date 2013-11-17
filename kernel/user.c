@@ -54,8 +54,8 @@ static DEFINE_SPINLOCK(uidhash_lock);
 /* root_user.__count is 2, 1 for init task cred, 1 for init_user_ns->user_ns */
 struct user_struct root_user = {
 	//initialization of set_mlimit used filed
-	.mem_quota	= 0,
-	.mem_used	= 0,
+	.mem_quota	= ATOMIC_LONG_INIT(0),
+	.mem_used	= ATOMIC_LONG_INIT(0),
 
 	.__count	= ATOMIC_INIT(2),
 	.processes	= ATOMIC_INIT(1),
@@ -156,8 +156,8 @@ struct user_struct *alloc_uid(struct user_namespace *ns, uid_t uid)
 
 		new->uid = uid;
 		atomic_set(&new->__count, 1);
-		new->mem_quota = 0;
-		new->mem_used = 0;
+		atomic_long_set(&new->mem_quota, 0);
+		atomic_long_set(&new->mem_used, 0);
 
 		new->user_ns = get_user_ns(ns);
 
