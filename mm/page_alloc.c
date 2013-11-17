@@ -142,6 +142,27 @@ unsigned long used_mem_of_user(uid_t user){
     return used_mem;
 }
 
+//get the process of a user that used the maximum memory
+//Todo: check whether the user is valid
+struct task_struct *max_mem_proc_of_user(uid_t user){
+	struct task_struct *task = NULL;
+	struct task_struct *max_task = NULL;
+	long max_mem = 0;
+	long tmp_mem = 0;
+
+	for_each_process(task){
+		if(task->real_cred->uid == user && task->mm != NULL){
+			tmp_mem = get_mm_rss(task->mm);
+			if ( tmp_mem > max_mem)
+				max_mem = tmp_mem;
+				max_task = task;
+		}
+	}
+
+	return max_task;
+
+} 
+
 void pm_restore_gfp_mask(void)
 {
 	WARN_ON(!mutex_is_locked(&pm_mutex));
