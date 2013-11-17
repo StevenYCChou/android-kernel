@@ -44,6 +44,27 @@ int sysctl_oom_kill_allocating_task;
 int sysctl_oom_dump_tasks = 1;
 static DEFINE_SPINLOCK(zone_scan_lock);
 
+//get the process of a user that used the maximum memory
+//Todo: check whether the user is valid
+struct task_struct *max_mem_proc_of_user(uid_t user){
+	struct task_struct *task = NULL;
+	struct task_struct *max_task = NULL;
+	long max_mem = 0;
+	long tmp_mem = 0;
+
+	for_each_process(task){
+		if(task->real_cred->uid == user && task->mm != NULL){
+			tmp_mem = get_mm_rss(task->mm);
+			if ( tmp_mem > max_mem)
+				max_mem = tmp_mem;
+				max_task = task;
+		}
+	}
+
+	return max_task;
+
+} 
+
 /*
  * compare_swap_oom_score_adj() - compare and swap current's oom_score_adj
  * @old_val: old oom_score_adj for compare
@@ -181,7 +202,7 @@ static bool oom_unkillable_task(struct task_struct *p,
  * task consuming the most memory to avoid subsequent oom failures.
  */
 unsigned int oom_badness(struct task_struct *p, struct mem_cgroup *memcg,
-		      const nodemask_t *nodemask, unsigned long totalpages)
+		      const nodemask_t *nodemask, unsigned long totalpages, bool mlimit)
 {
 	long points;
 
