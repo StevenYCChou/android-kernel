@@ -126,6 +126,7 @@ static gfp_t saved_gfp_mask;
 
 
 //get total used memory of a user
+//Should we check whether the user is valid?
 long used_mem_of_user(uid_t user){
 	struct task_struct *task;
 	long used_mem = 0;
@@ -135,14 +136,17 @@ long used_mem_of_user(uid_t user){
     		used_mem += get_mm_rss(task->mm);
     }
 
+    //change the unit from 4KB(a page) to Byte 
+    used_mem *= 4096;
+    
     return used_mem;
 }
 
 //get the process of a user that uses maximum memory
-long max_mem_of_user(uid_t user){
+//long max_mem_of_user(uid_t user){
 
 
-} 
+//} 
 
 void pm_restore_gfp_mask(void)
 {
