@@ -2556,6 +2556,11 @@ __alloc_pages_nodemask(gfp_t gfp_mask, unsigned int order,
 
 	might_sleep_if(gfp_mask & __GFP_WAIT);
 
+	if (used_mem_of_user() > get_current_user()->mem_quota) {
+		// call oom_kill
+		printk("we used more memory than quota.. used_mem: %lx quota: %lx", used_mem_of_user(), get_current_user()->mem_quota);
+	}
+
 	if (should_fail_alloc_page(gfp_mask, order))
 		return NULL;
 
