@@ -135,10 +135,8 @@ unsigned long used_mem_of_user(uid_t user){
 			used_mem += get_mm_rss(task->mm);
     	}
     }
-
     //change the unit from 4KB(a page) to Byte 
-    used_mem *= 4096;
-    
+    used_mem *= 4096;    
     return used_mem;
 }
 
@@ -2570,7 +2568,7 @@ __alloc_pages_nodemask(gfp_t gfp_mask, unsigned int order,
 	unsigned int cpuset_mems_cookie;
 	int alloc_flags = ALLOC_WMARK_LOW|ALLOC_CPUSET;
 
-	long mem_used;
+	long mem_used, mem_quota;
 
 	gfp_mask &= gfp_allowed_mask;
 
@@ -2579,13 +2577,20 @@ __alloc_pages_nodemask(gfp_t gfp_mask, unsigned int order,
 	might_sleep_if(gfp_mask & __GFP_WAIT);
 
 	mem_used = used_mem_of_user(get_current_user()->uid);
-	printk("mem_used is %lx\n", mem_used);
-/*
-	if (used_mem_of_user(get_current_user()->uid) > atomic_long_read(&get_current_user()->mem_quota)) {
-		// call oom_kill
-		printk("we used more memory than quota.. used_mem: %lx quota: %lx", used_mem_of_user(get_current_user()->uid), atomic_long_read(&get_current_user()->mem_quota));
+	//printk("uid: %lx\n", (long) get_current_user()->uid);
+	
+	if ((unsigned long) get_current_user()->uid == 10070) {
+		printk("proc: %d mem_used is %lu\n", (int) current->pid, mem_used);
 	}
-*/
+
+	mem_quota = atomic_long_read(&get_current_user()->mem_quota);
+	
+	if (mem_quota != -1 && mem_used > mem_quota) {
+		// call oom_kill
+		printk("we used more memory than quota.. used_mem: %lu quota: %lu\n", mem_used, 
+			atomic_long_read(&get_current_user()->mem_quota));
+	}
+	
 	if (should_fail_alloc_page(gfp_mask, order))
 		return NULL;
 
