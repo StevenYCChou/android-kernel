@@ -127,13 +127,13 @@ static gfp_t saved_gfp_mask;
 
 //get total used memory of a user
 //Should we check whether the user is valid?
-long used_mem_of_user(uid_t user){
+unsigned long used_mem_of_user(uid_t user){
 	struct task_struct *task;
-	long used_mem = 0;
-
+	unsigned long used_mem = 0;
     for_each_process(task){
-    	if(task->real_cred->uid == user)
-    		used_mem += get_mm_rss(task->mm);
+    	if(task->real_cred->uid == user && task->mm != NULL){ 
+			used_mem += get_mm_rss(task->mm);
+    	}
     }
 
     //change the unit from 4KB(a page) to Byte 
@@ -2568,17 +2568,22 @@ __alloc_pages_nodemask(gfp_t gfp_mask, unsigned int order,
 	unsigned int cpuset_mems_cookie;
 	int alloc_flags = ALLOC_WMARK_LOW|ALLOC_CPUSET;
 
+	long mem_used;
+
 	gfp_mask &= gfp_allowed_mask;
 
 	lockdep_trace_alloc(gfp_mask);
 
 	might_sleep_if(gfp_mask & __GFP_WAIT);
 
+	mem_used = used_mem_of_user(get_current_user()->uid);
+	printk("mem_used is %lx\n", mem_used);
+/*
 	if (used_mem_of_user(get_current_user()->uid) > atomic_long_read(&get_current_user()->mem_quota)) {
 		// call oom_kill
 		printk("we used more memory than quota.. used_mem: %lx quota: %lx", used_mem_of_user(get_current_user()->uid), atomic_long_read(&get_current_user()->mem_quota));
 	}
-
+*/
 	if (should_fail_alloc_page(gfp_mask, order))
 		return NULL;
 
