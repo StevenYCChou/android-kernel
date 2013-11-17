@@ -8,12 +8,16 @@
 int set_mlimit(uid_t uid, long mem_max){
 	struct user_struct *user;
 
+	printk("set_mlimit is called 1\n");
+
 	if (mem_max <= 0)
 		return -EINVAL;
 
 	user = find_user(uid);
 	if(user == NULL)
 		return -EINVAL;
+
+	printk("set_mlimit is called 2\n");
 
 	atomic_long_set(&user->mem_quota, mem_max);
 
