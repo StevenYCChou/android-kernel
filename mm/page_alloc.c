@@ -125,7 +125,7 @@ gfp_t gfp_allowed_mask __read_mostly = GFP_BOOT_MASK;
 static gfp_t saved_gfp_mask;
 
 
-//find all processes for a user
+//get total used memory of a user
 long used_mem_of_user(uid_t user){
 	struct task_struct *task;
 	long used_mem = 0;
@@ -135,8 +135,14 @@ long used_mem_of_user(uid_t user){
     		used_mem += get_mm_rss(task->mm);
     }
 
-    return 0;
+    return used_mem;
 }
+
+//get the process of a user that uses maximum memory
+long max_mem_of_user(uid_t user){
+
+
+} 
 
 void pm_restore_gfp_mask(void)
 {
