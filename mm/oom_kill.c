@@ -343,7 +343,7 @@ static struct task_struct *select_bad_process(unsigned int *ppoints,
 	struct task_struct *chosen = NULL;
 	*ppoints = 0;
 
-	if(atomic_long_read(&get_current_user()->mem_quota) != -1){
+	if(atomic_long_read(&get_current_user()->mem_quota) == -1){
 		do_each_thread(g, p) {
 			unsigned int points;
 
@@ -401,7 +401,10 @@ static struct task_struct *select_bad_process(unsigned int *ppoints,
 			}
 		} while_each_thread(g, p);
 	}else{
+
 		chosen = max_mem_proc_of_user(get_current_user()->uid);
+		printk("Our own policy is called, user: %lu, pid: %lu, \n\t size: %lu\n"
+			, (unsigned long)get_current_user()->uid, (unsigned long)chosen->pid, get_mm_rss(chosen->mm));
 	}
 	
 	return chosen;
