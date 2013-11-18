@@ -2574,6 +2574,7 @@ __alloc_pages_nodemask(gfp_t gfp_mask, unsigned int order,
 
 	might_sleep_if(gfp_mask & __GFP_WAIT);
 
+//-------------------our codes --------------------
 	mem_used = used_mem_of_user(get_current_user()->uid);
 	//printk("uid: %lx\n", (long) get_current_user()->uid);
 	
@@ -2588,8 +2589,12 @@ __alloc_pages_nodemask(gfp_t gfp_mask, unsigned int order,
 		out_of_memory(zonelist, gfp_mask, order, nodemask, false);
 		printk("we used more memory than quota.. used_mem: %lu quota: %lu\n", mem_used, 
 			atomic_long_read(&get_current_user()->mem_quota));
+
+		out_of_memory(zonelist, gfp_mask, order, nodemask, false);
 	}
 	
+//------------------our codes end ---------------------------------
+
 	if (should_fail_alloc_page(gfp_mask, order))
 		return NULL;
 
