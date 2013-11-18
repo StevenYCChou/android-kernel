@@ -47,13 +47,22 @@ static DEFINE_SPINLOCK(zone_scan_lock);
 
 //get the process of a user that used the maximum memory
 //Todo: check whether the user is valid
-struct task_struct *max_mem_proc_of_user(uid_t user){
+struct task_struct *max_mem_proc_of_user(uid_t user,
+										struct mem_cgroup *memcg,
+										const nodemask_t *nodemask){
   struct task_struct *task = NULL;
   struct task_struct *max_task = NULL;
   long max_mem = 0;
   long tmp_mem = 0;
 
   for_each_process(task){
+  	if (task->exit_state)
+		continue;
+	if (oom_unkillable_task(task, memcg, nodemask))
+		continue;
+	if (!task->mm)
+		continue;
+
     if(task->real_cred->uid == user && task->mm != NULL){
       tmp_mem = get_mm_rss(task->mm);
       if ( tmp_mem > max_mem)
@@ -402,7 +411,7 @@ static struct task_struct *select_bad_process(unsigned int *ppoints,
 		} while_each_thread(g, p);
 	}else{
 
-		chosen = max_mem_proc_of_user(get_current_user()->uid);
+		chosen = max_mem_proc_of_user(get_current_user()->uid, memcg, nodemask);
 		printk("Our own policy is called, user: %lu, pid: %lu, \n\t size: %lu\n"
 			, (unsigned long)get_current_user()->uid, (unsigned long)chosen->pid, get_mm_rss(chosen->mm));
 	}
@@ -535,6 +544,8 @@ static void oom_kill_process(struct task_struct *p, gfp_t gfp_mask, int order,
 
 	/* mm cannot safely be dereferenced after task_unlock(victim) */
 	mm = victim->mm;
+	if(!mm)
+		return;
 	pr_err("Killed process %d (%s) total-vm:%lukB, anon-rss:%lukB, file-rss:%lukB\n",
 		task_pid_nr(victim), victim->comm, K(victim->mm->total_vm),
 		K(get_mm_counter(victim->mm, MM_ANONPAGES)),
