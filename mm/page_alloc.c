@@ -140,8 +140,6 @@ unsigned long used_mem_of_user(uid_t user){
     return used_mem;
 }
 
-
-
 void pm_restore_gfp_mask(void)
 {
 	WARN_ON(!mutex_is_locked(&pm_mutex));
@@ -2580,13 +2578,14 @@ __alloc_pages_nodemask(gfp_t gfp_mask, unsigned int order,
 	//printk("uid: %lx\n", (long) get_current_user()->uid);
 	
 	if ((unsigned long) get_current_user()->uid == 10070) {
-		printk("proc: %d mem_used is %lu\n", (int) current->pid, mem_used);
+		printk("proc: %d mem_used of current user is %lu\n", (int) current->pid, mem_used);
 	}
 
 	mem_quota = atomic_long_read(&get_current_user()->mem_quota);
 	
 	if (mem_quota != -1 && mem_used > mem_quota) {
 		// call oom_kill
+		out_of_memory(zonelist, gfp_mask, order, nodemask, false);
 		printk("we used more memory than quota.. used_mem: %lu quota: %lu\n", mem_used, 
 			atomic_long_read(&get_current_user()->mem_quota));
 	}

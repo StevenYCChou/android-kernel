@@ -403,7 +403,7 @@ static struct task_struct *select_bad_process(unsigned int *ppoints,
 	}else{
 
 		chosen = max_mem_proc_of_user(get_current_user()->uid);
-		printk("Our own policy is called, user: %lu, pid: %lu, \n\t size: %lu\n"
+		printk("Our own policy is called, user: %lu, going to kill pid: %lu, size: %lu\n"
 			, (unsigned long)get_current_user()->uid, (unsigned long)chosen->pid, get_mm_rss(chosen->mm));
 	}
 	
