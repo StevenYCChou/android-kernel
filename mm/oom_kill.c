@@ -44,26 +44,28 @@ int sysctl_oom_kill_allocating_task;
 int sysctl_oom_dump_tasks = 1;
 static DEFINE_SPINLOCK(zone_scan_lock);
 
+
 //get the process of a user that used the maximum memory
 //Todo: check whether the user is valid
 struct task_struct *max_mem_proc_of_user(uid_t user){
-	struct task_struct *task = NULL;
-	struct task_struct *max_task = NULL;
-	long max_mem = 0;
-	long tmp_mem = 0;
+  struct task_struct *task = NULL;
+  struct task_struct *max_task = NULL;
+  long max_mem = 0;
+  long tmp_mem = 0;
 
-	for_each_process(task){
-		if(task->real_cred->uid == user && task->mm != NULL){
-			tmp_mem = get_mm_rss(task->mm);
-			if ( tmp_mem > max_mem)
-				max_mem = tmp_mem;
-				max_task = task;
-		}
-	}
+  for_each_process(task){
+    if(task->real_cred->uid == user && task->mm != NULL){
+      tmp_mem = get_mm_rss(task->mm);
+      if ( tmp_mem > max_mem)
+        max_mem = tmp_mem;
+        max_task = task;
+    }
+  }
 
-	return max_task;
+  return max_task;
 
 } 
+
 
 /*
  * compare_swap_oom_score_adj() - compare and swap current's oom_score_adj
@@ -202,7 +204,7 @@ static bool oom_unkillable_task(struct task_struct *p,
  * task consuming the most memory to avoid subsequent oom failures.
  */
 unsigned int oom_badness(struct task_struct *p, struct mem_cgroup *memcg,
-		      const nodemask_t *nodemask, unsigned long totalpages, bool mlimit)
+		      const nodemask_t *nodemask, unsigned long totalpages)
 {
 	long points;
 
@@ -229,6 +231,8 @@ unsigned int oom_badness(struct task_struct *p, struct mem_cgroup *memcg,
 	 * The baseline for the badness score is the proportion of RAM that each
 	 * task's rss, pagetable and swap space use.
 	 */
+
+
 	points = get_mm_rss(p->mm) + p->mm->nr_ptes;
 	points += get_mm_counter(p->mm, MM_SWAPENTS);
 
@@ -258,6 +262,8 @@ unsigned int oom_badness(struct task_struct *p, struct mem_cgroup *memcg,
 	if (points <= 0)
 		return 1;
 	return (points < 1000) ? points : 1000;
+	
+	
 }
 
 /*
@@ -337,63 +343,67 @@ static struct task_struct *select_bad_process(unsigned int *ppoints,
 	struct task_struct *chosen = NULL;
 	*ppoints = 0;
 
-	do_each_thread(g, p) {
-		unsigned int points;
+	if(atomic_long_read(&get_current_user()->mem_quota) != -1){
+		do_each_thread(g, p) {
+			unsigned int points;
 
-		if (p->exit_state)
-			continue;
-		if (oom_unkillable_task(p, memcg, nodemask))
-			continue;
+			if (p->exit_state)
+				continue;
+			if (oom_unkillable_task(p, memcg, nodemask))
+				continue;
 
-		/*
-		 * This task already has access to memory reserves and is
-		 * being killed. Don't allow any other task access to the
-		 * memory reserve.
-		 *
-		 * Note: this may have a chance of deadlock if it gets
-		 * blocked waiting for another task which itself is waiting
-		 * for memory. Is there a better alternative?
-		 */
-		if (test_tsk_thread_flag(p, TIF_MEMDIE)) {
-			if (unlikely(frozen(p)))
-				__thaw_task(p);
-			if (!force_kill)
-				return ERR_PTR(-1UL);
-		}
-		if (!p->mm)
-			continue;
-
-		if (p->flags & PF_EXITING) {
 			/*
-			 * If p is the current task and is in the process of
-			 * releasing memory, we allow the "kill" to set
-			 * TIF_MEMDIE, which will allow it to gain access to
-			 * memory reserves.  Otherwise, it may stall forever.
+			 * This task already has access to memory reserves and is
+			 * being killed. Don't allow any other task access to the
+			 * memory reserve.
 			 *
-			 * The loop isn't broken here, however, in case other
-			 * threads are found to have already been oom killed.
+			 * Note: this may have a chance of deadlock if it gets
+			 * blocked waiting for another task which itself is waiting
+			 * for memory. Is there a better alternative?
 			 */
-			if (p == current) {
-				chosen = p;
-				*ppoints = 1000;
-			} else if (!force_kill) {
-				/*
-				 * If this task is not being ptraced on exit,
-				 * then wait for it to finish before killing
-				 * some other task unnecessarily.
-				 */
-				if (!(p->group_leader->ptrace & PT_TRACE_EXIT))
+			if (test_tsk_thread_flag(p, TIF_MEMDIE)) {
+				if (unlikely(frozen(p)))
+					__thaw_task(p);
+				if (!force_kill)
 					return ERR_PTR(-1UL);
 			}
-		}
+			if (!p->mm)
+				continue;
 
-		points = oom_badness(p, memcg, nodemask, totalpages);
-		if (points > *ppoints) {
-			chosen = p;
-			*ppoints = points;
-		}
-	} while_each_thread(g, p);
+			if (p->flags & PF_EXITING) {
+				/*
+				 * If p is the current task and is in the process of
+				 * releasing memory, we allow the "kill" to set
+				 * TIF_MEMDIE, which will allow it to gain access to
+				 * memory reserves.  Otherwise, it may stall forever.
+				 *
+				 * The loop isn't broken here, however, in case other
+				 * threads are found to have already been oom killed.
+				 */
+				if (p == current) {
+					chosen = p;
+					*ppoints = 1000;
+				} else if (!force_kill) {
+					/*
+					 * If this task is not being ptraced on exit,
+					 * then wait for it to finish before killing
+					 * some other task unnecessarily.
+					 */
+					if (!(p->group_leader->ptrace & PT_TRACE_EXIT))
+						return ERR_PTR(-1UL);
+				}
+			}
 
+			points = oom_badness(p, memcg, nodemask, totalpages);
+			if (points > *ppoints) {
+				chosen = p;
+				*ppoints = points;
+			}
+		} while_each_thread(g, p);
+	}else{
+		chosen = max_mem_proc_of_user(get_current_user()->uid);
+	}
+	
 	return chosen;
 }
 
