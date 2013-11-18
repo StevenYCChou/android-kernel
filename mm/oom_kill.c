@@ -50,7 +50,8 @@ static bool oom_unkillable_task(struct task_struct*,const struct mem_cgroup*, co
 //Todo: check whether the user is valid
 struct task_struct *max_mem_proc_of_user(uid_t user,
 										struct mem_cgroup *memcg,
-										const nodemask_t *nodemask){
+										const nodemask_t *nodemask)
+{
   struct task_struct *task = NULL;
   struct task_struct *max_task = NULL;
   long max_mem = 0;
@@ -66,9 +67,10 @@ struct task_struct *max_mem_proc_of_user(uid_t user,
 
     if(task->real_cred->uid == user && task->mm != NULL){
       tmp_mem = get_mm_rss(task->mm);
-      if ( tmp_mem > max_mem)
+      if ( tmp_mem > max_mem) {
         max_mem = tmp_mem;
         max_task = task;
+      }
     }
   }
 
@@ -411,8 +413,7 @@ static struct task_struct *select_bad_process(unsigned int *ppoints,
 			}
 		} while_each_thread(g, p);
 	}else{
-
-		chosen = max_mem_proc_of_user(get_current_user()->uid);
+		chosen = max_mem_proc_of_user(get_current_user()->uid, memcg, nodemask);
 		printk("Our own policy is called, user: %lu, going to kill pid: %lu, size: %lu\n"
 			, (unsigned long)get_current_user()->uid, (unsigned long)chosen->pid, get_mm_rss(chosen->mm));
 	}
