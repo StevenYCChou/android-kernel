@@ -44,6 +44,7 @@ int sysctl_oom_kill_allocating_task;
 int sysctl_oom_dump_tasks = 1;
 static DEFINE_SPINLOCK(zone_scan_lock);
 
+static bool oom_unkillable_task(struct task_struct*,const struct mem_cgroup*, const nodemask_t*);
 
 //get the process of a user that used the maximum memory
 //Todo: check whether the user is valid

@@ -10,7 +10,7 @@ int set_mlimit(uid_t uid, long mem_max){
 
 	printk("set_mlimit is called 1\n");
 
-	if (mem_max <= 0)
+	if (!(mem_max > 0 || mem_max == -1))
 		return -EINVAL;
 
 	user = find_user(uid);
