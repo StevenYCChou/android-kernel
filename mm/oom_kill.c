@@ -506,27 +506,32 @@ static void oom_kill_process(struct task_struct *p, gfp_t gfp_mask, int order,
 	 * parent.  This attempts to lose the minimal amount of work done while
 	 * still freeing memory.
 	 */
-	do {
-		list_for_each_entry(child, &t->children, sibling) {
-			unsigned int child_points;
 
-			if (child->mm == p->mm)
-				continue;
-			/*
-			 * oom_badness() returns 0 if the thread is unkillable
-			 */
-			child_points = oom_badness(child, memcg, nodemask,
-								totalpages);
-			if (child_points > victim_points) {
-				victim = child;
-				victim_points = child_points;
+	if(atomic_long_read(&get_current_user()->mem_quota) == -1){
+		do {
+			list_for_each_entry(child, &t->children, sibling) {
+				unsigned int child_points;
+
+				if (child->mm == p->mm)
+					continue;
+				/*
+				 * oom_badness() returns 0 if the thread is unkillable
+				 */
+				child_points = oom_badness(child, memcg, nodemask,
+									totalpages);
+				if (child_points > victim_points) {
+					victim = child;
+					victim_points = child_points;
+				}
 			}
-		}
-	} while_each_thread(p, t);
+		} while_each_thread(p, t);
+	
 
-	victim = find_lock_task_mm(victim);
-	if (!victim)
-		return;
+
+		victim = find_lock_task_mm(victim);
+		if (!victim)
+			return;
+	}
 
 	/* mm cannot safely be dereferenced after task_unlock(victim) */
 	mm = victim->mm;
