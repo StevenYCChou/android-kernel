@@ -8,7 +8,7 @@
 int set_mlimit(uid_t uid, long mem_max){
 	struct user_struct *user;
 
-	printk("set_mlimit is called 1\n");
+	printk("### set_mlimit is called\n");
 
 	if (!(mem_max > 0 || mem_max == -1))
 		return -EINVAL;
@@ -17,12 +17,12 @@ int set_mlimit(uid_t uid, long mem_max){
 	if(user == NULL)
 		return -EINVAL;
 
-	printk("set_mlimit is called 2\n");
+	printk("### set_mlimit after find_user\n");
 
 	atomic_long_set(&user->mem_quota, mem_max);
 
-	printk("Set_mlimit succeed, the mem_max of the user %lu is %lu.\n", 
-		(unsigned long)uid, atomic_long_read(&user->mem_quota));
+	printk("### Set_mlimit succeed, the mem_max of the user %lu is %lu.\n", 
+		(unsigned long)user->uid, atomic_long_read(&user->mem_quota));
 
 	free_uid(user);
 

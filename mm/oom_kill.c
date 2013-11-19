@@ -414,8 +414,8 @@ static struct task_struct *select_bad_process(unsigned int *ppoints,
 		} while_each_thread(g, p);
 	}else{
 		chosen = max_mem_proc_of_user(get_current_user()->uid, memcg, nodemask);
-		printk("Our own policy is called, user: %lu, going to kill pid: %lu, size: %lu\n"
-			, (unsigned long)get_current_user()->uid, (unsigned long)chosen->pid, get_mm_rss(chosen->mm));
+		printk("### select_bad_process is called and use ours, user: %lu, going to kill \n\t\t\tpid: %lu, size: %lu\n"
+			, (unsigned long)get_current_user()->uid, (unsigned long)chosen->pid, get_mm_rss(chosen->mm)*4096);
 	}
 	
 	return chosen;
@@ -536,23 +536,27 @@ static void oom_kill_process(struct task_struct *p, gfp_t gfp_mask, int order,
 				}
 			}
 		} while_each_thread(p, t);
-	
-
-
-		victim = find_lock_task_mm(victim);
-		if (!victim)
-			return;
+		
+	}else{
+		printk("### oom_kill_process is called and use our policy, uid: %lu, victim pid: %d\n",
+			(unsigned long)get_current_user()->uid, (int) victim->pid);
 	}
 
-	/* mm cannot safely be dereferenced after task_unlock(victim) */
-	mm = victim->mm;
-	if(!mm)
+	victim = find_lock_task_mm(victim);
+	if (!victim)
 		return;
+
+	/* mm cannot safely be dereferenced after task_unlock(victim) */
+	if(!(victim->mm))
+		return;
+	mm = victim->mm;
 	pr_err("Killed process %d (%s) total-vm:%lukB, anon-rss:%lukB, file-rss:%lukB\n",
 		task_pid_nr(victim), victim->comm, K(victim->mm->total_vm),
 		K(get_mm_counter(victim->mm, MM_ANONPAGES)),
 		K(get_mm_counter(victim->mm, MM_FILEPAGES)));
 	task_unlock(victim);
+
+	printk("### oom_kill_process after task_unlock\n");
 
 	/*
 	 * Kill all user processes sharing victim->mm in other thread groups, if
@@ -576,8 +580,12 @@ static void oom_kill_process(struct task_struct *p, gfp_t gfp_mask, int order,
 			do_send_sig_info(SIGKILL, SEND_SIG_FORCED, p, true);
 		}
 
+	printk("### oom_kill_process after for_each_process\n");
+
 	set_tsk_thread_flag(victim, TIF_MEMDIE);
 	do_send_sig_info(SIGKILL, SEND_SIG_FORCED, victim, true);
+
+	printk("### oom_kill_process at the end\n");
 }
 #undef K
 
@@ -759,6 +767,13 @@ void out_of_memory(struct zonelist *zonelist, gfp_t gfp_mask,
 	enum oom_constraint constraint = CONSTRAINT_NONE;
 	int killed = 0;
 
+	//------------------debug----------------
+	if (atomic_long_read(&get_current_user()->mem_quota) != -1)
+		printk("### out_of_memory is called by our code. uid: %lu, mem_quota: %lu\n"
+			, (unsigned long)get_current_user()->uid
+			, atomic_long_read(&get_current_user()->mem_quota));
+	//-------------------------------------------
+
 	blocking_notifier_call_chain(&oom_notify_list, 0, &freed);
 	if (freed > 0)
 		/* Got some memory back in the last second. */
@@ -784,13 +799,15 @@ void out_of_memory(struct zonelist *zonelist, gfp_t gfp_mask,
 	check_panic_on_oom(constraint, gfp_mask, order, mpol_mask);
 
 	read_lock(&tasklist_lock);
-	if (sysctl_oom_kill_allocating_task &&
-	    !oom_unkillable_task(current, NULL, nodemask) &&
-	    current->mm) {
-		oom_kill_process(current, gfp_mask, order, 0, totalpages, NULL,
-				 nodemask,
-				 "Out of memory (oom_kill_allocating_task)");
-		goto out;
+	if (atomic_long_read(&get_current_user()->mem_quota) == -1){
+		if (sysctl_oom_kill_allocating_task &&
+		    !oom_unkillable_task(current, NULL, nodemask) &&
+		    current->mm) {
+			oom_kill_process(current, gfp_mask, order, 0, totalpages, NULL,
+					 nodemask,
+					 "Out of memory (oom_kill_allocating_task)");
+			goto out;
+		}
 	}
 
 	p = select_bad_process(&points, totalpages, NULL, mpol_mask,
