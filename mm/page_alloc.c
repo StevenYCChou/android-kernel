@@ -135,7 +135,7 @@ unsigned long used_mem_of_user(uid_t user){
     	}
     }
     //change the unit from 4KB(a page) to Byte 
-    used_mem *= 4096;    
+    used_mem *= PAGE_SIZE;
     return used_mem;
 }
 
@@ -2581,7 +2581,7 @@ __alloc_pages_nodemask(gfp_t gfp_mask, unsigned int order,
 	
 
 	//issue: it seem now the the RSS updates every 66 pages 
-	if (mem_quota != -1 && (mem_used + 4096) > mem_quota) {
+	if (mem_quota != -1 && (mem_used + PAGE_SIZE) > mem_quota) {
 		out_of_memory(zonelist, gfp_mask, order, nodemask, false);
 	}
 	
