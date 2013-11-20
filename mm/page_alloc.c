@@ -126,7 +126,6 @@ static gfp_t saved_gfp_mask;
 
 
 //get total used memory of a user
-//Should we check whether the user is valid?
 unsigned long used_mem_of_user(uid_t user){
 	struct task_struct *task;
 	unsigned long used_mem = 0;
@@ -2567,7 +2566,6 @@ __alloc_pages_nodemask(gfp_t gfp_mask, unsigned int order,
 	int alloc_flags = ALLOC_WMARK_LOW|ALLOC_CPUSET;
 
 	long long mem_used, mem_quota;
-	bool out_of_mem = false; //for debug
 
 	gfp_mask &= gfp_allowed_mask;
 
@@ -2580,22 +2578,11 @@ __alloc_pages_nodemask(gfp_t gfp_mask, unsigned int order,
 	mem_quota = atomic_long_read(&get_current_user()->mem_quota);
 	
 	
-	if ((unsigned long) get_current_user()->uid == 10070) {
-		//printk("### proc: %d mem_used of current user is %llu\n", (int) current->pid, mem_used);
-	}
+	
 
 	//issue: it seem now the the RSS updates every 66 pages 
 	if (mem_quota != -1 && (mem_used + 4096) > mem_quota) {
-
-		printk("### Used more memory than quota.. used_mem: %llu quota: %lu, uid: %lu, pid: %d\n"
-			, mem_used, atomic_long_read(&get_current_user()->mem_quota)
-			, (unsigned long)get_current_user()->uid, (int) current->pid);
-
 		out_of_memory(zonelist, gfp_mask, order, nodemask, false);
-
-		printk("### __alloc_pages_nodemask after out_of_memory\n");
-
-		out_of_mem = true;
 	}
 	
 //------------------ End of our codes ---------------------------------
@@ -2603,8 +2590,6 @@ __alloc_pages_nodemask(gfp_t gfp_mask, unsigned int order,
 	if (should_fail_alloc_page(gfp_mask, order))
 		return NULL;
 
-	if (out_of_mem)
-		printk("### __alloc_pages_nodemask after should_fail_alloc_page\n");
 
 	/*
 	 * Check the zones suitable for the gfp_mask contain at least one
@@ -2614,8 +2599,7 @@ __alloc_pages_nodemask(gfp_t gfp_mask, unsigned int order,
 	if (unlikely(!zonelist->_zonerefs->zone))
 		return NULL;
 
-	if (out_of_mem)
-		printk("### __alloc_pages_nodemask after zonelist->_zonerefs...\n");
+	
 
 retry_cpuset:
 	cpuset_mems_cookie = get_mems_allowed();
@@ -2627,8 +2611,7 @@ retry_cpuset:
 	if (!preferred_zone)
 		goto out;
 
-	if (out_of_mem)
-		printk("### __alloc_pages_nodemask after first_zones_zonelist\n");
+	
 
 #ifdef CONFIG_CMA
 	if (allocflags_to_migratetype(gfp_mask) == MIGRATE_MOVABLE)
@@ -2645,8 +2628,7 @@ retry_cpuset:
 
 	trace_mm_page_alloc(page, order, gfp_mask, migratetype);
 
-	if (out_of_mem)
-		printk("### __alloc_pages_nodemask after trace_mm_page_alloc\n");
+	
 
 out:
 	/*
@@ -2658,8 +2640,7 @@ out:
 	if (unlikely(!put_mems_allowed(cpuset_mems_cookie) && !page))
 		goto retry_cpuset;
 
-	if (out_of_mem)
-		printk("### __alloc_pages_nodemask at the end\n");
+	
 
 	return page;
 }
