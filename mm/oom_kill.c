@@ -66,7 +66,7 @@ struct task_struct *max_mem_proc_of_user(uid_t user,
 
     if(task->real_cred->uid == user){
       tmp_mem = get_mm_rss(task->mm);
-      if ( tmp_mem > max_mem) {
+      if (tmp_mem > max_mem) {
         max_mem = tmp_mem;
         max_task = task;
       }

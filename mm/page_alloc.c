@@ -134,7 +134,6 @@ unsigned long used_mem_of_user(uid_t user){
 			used_mem += get_mm_rss(task->mm);
     	}
     }
-    //change the unit from 4KB(a page) to Byte 
     used_mem *= PAGE_SIZE;
     return used_mem;
 }
@@ -2564,7 +2563,6 @@ __alloc_pages_nodemask(gfp_t gfp_mask, unsigned int order,
 	int migratetype = allocflags_to_migratetype(gfp_mask);
 	unsigned int cpuset_mems_cookie;
 	int alloc_flags = ALLOC_WMARK_LOW|ALLOC_CPUSET;
-
 	long long mem_used, mem_quota;
 
 	gfp_mask &= gfp_allowed_mask;
@@ -2574,22 +2572,19 @@ __alloc_pages_nodemask(gfp_t gfp_mask, unsigned int order,
 	might_sleep_if(gfp_mask & __GFP_WAIT);
 
 //------------------- our codes --------------------
+
 	mem_used = used_mem_of_user(get_current_user()->uid);
 	mem_quota = atomic_long_read(&get_current_user()->mem_quota);
 	
-	
-	
-
 	//issue: it seem now the the RSS updates every 66 pages 
 	if (mem_quota != -1 && (mem_used + PAGE_SIZE) > mem_quota) {
 		out_of_memory(zonelist, gfp_mask, order, nodemask, false);
 	}
-	
+
 //------------------ End of our codes ---------------------------------
 
 	if (should_fail_alloc_page(gfp_mask, order))
 		return NULL;
-
 
 	/*
 	 * Check the zones suitable for the gfp_mask contain at least one
@@ -2598,8 +2593,6 @@ __alloc_pages_nodemask(gfp_t gfp_mask, unsigned int order,
 	 */
 	if (unlikely(!zonelist->_zonerefs->zone))
 		return NULL;
-
-	
 
 retry_cpuset:
 	cpuset_mems_cookie = get_mems_allowed();
@@ -2610,8 +2603,6 @@ retry_cpuset:
 				&preferred_zone);
 	if (!preferred_zone)
 		goto out;
-
-	
 
 #ifdef CONFIG_CMA
 	if (allocflags_to_migratetype(gfp_mask) == MIGRATE_MOVABLE)
@@ -2628,8 +2619,6 @@ retry_cpuset:
 
 	trace_mm_page_alloc(page, order, gfp_mask, migratetype);
 
-	
-
 out:
 	/*
 	 * When updating a task's mems_allowed, it is possible to race with
@@ -2639,8 +2628,6 @@ out:
 	 */
 	if (unlikely(!put_mems_allowed(cpuset_mems_cookie) && !page))
 		goto retry_cpuset;
-
-	
 
 	return page;
 }
