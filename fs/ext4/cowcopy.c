@@ -25,24 +25,24 @@ asmlinkage int sys_ext4_cowcopy(const char __user *src, const char __user *dest)
 
     printk ("### sys_ext4_cowcopy is called\n");
 
-    if (0 != vfs_stat(src, &kstat)) {
-        printk ("Error in stat\n");
-        return -1;
+    //get the kstat info of the src
+    if ( vfs_stat(src, &kstat) != 0) {
+        printk ("### %s doesn't exist.\n", src);
+        return -EPERM;
     }
-
+    //check whether src is a regular file and isn't a dir 
+    if (!S_ISREG (kstat.mode) || S_ISDIR (kstat.mode)) {
+        printk ("### %s is not a regular file or it's a directory.\n", src);
+        return -EPERM;
+    }
+    
     printk("### stat.ino: %llu \n", kstat.ino);
     printk("### stat.dev: %llu \n", (unsigned long long)kstat.dev);
     printk("### stat.mode: %llu \n", (unsigned long long)kstat.mode);
 
+    
 
-    // if (!S_ISREG (st_buf.st_mode)) {
-    //     printk ("%s is not a regular file.\n", src);
-    //     return -EPERM;
-    // }
-    // if (S_ISDIR (st_buf.st_mode)) {
-    //     printk ("%s is a directory.\n", src);
-    //     return -EPERM;
-    // }
+   
 
 	return ext4_cowcopy(src, dest);
 }
