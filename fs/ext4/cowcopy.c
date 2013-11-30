@@ -88,5 +88,28 @@ asmlinkage int sys_ext4_cowcopy(const char __user *src, const char __user *dest)
 }
 
 int  ext4_cowcopy(const char __user *src, const char __user *dest){
+    struct path src_path;
+    struct nameidata src_parent_nd;
+    struct path dest_path;
+    struct dentry* dest_dentry;
+    
+    int res;
+    
+    res = kern_path(src, LOOKUP_FOLLOW, &src_path);
+    if(res)
+        printk("### some error when lookup src path: %s\n", src);
+
+    res = kern_path_parent(src, &src_parent_nd);
+    if(res)
+        printk("### some error when lookup parent of src path: %s\n", src);    
+
+    dest_dentry = user_path_create(AT_FDCWD, dest, &dest_path, 0);
+    if(res)
+        printk("### some error when lookup dest path: %s\n", dest);
+
+    printk("### begin of hardlink between src: %s and dest: %s\n", src, dest);
+    src_parent_nd.inode->i_op->link(src_path.dentry, src_parent_nd.inode, dest_path.dentry);
+    printk("### end of hardlink between src: %s and dest: %s\n", src, dest);
+    
 	return 0;
 }
