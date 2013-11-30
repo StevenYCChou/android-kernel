@@ -65,10 +65,16 @@ asmlinkage int sys_ext4_cowcopy(const char __user *src, const char __user *dest)
 	s_dev_src = nd.inode->i_sb->s_dev;
 	if( kern_path_parent(dest, &nd) != 0){
 		//incorrect dest parameter. what should we return? 
-		//Todo: we should check if dest is a file.
 		printk("### kern_path_parent failed when checking dest, dest: %s\n", dest);
 		return -EINVAL;
 	}else{
+		//check if dest is a file. Again, make sure what should we return.
+		printk("### The last char of dest is: %c\n", dest[strlen(dest)-1]);
+		if(dest[strlen(dest)-1] == '/'){
+			printk("### The dest is a directory.\n");
+			return -EINVAL;
+		}
+
 		s_dev_dest = nd.inode->i_sb->s_dev;
 		printk("### s_dev_src: %lu, s_dev_dest: %lu\n", 
 			(unsigned long)s_dev_src, (unsigned long)s_dev_dest);
