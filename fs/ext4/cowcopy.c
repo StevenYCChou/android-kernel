@@ -26,10 +26,11 @@ asmlinkage int sys_ext4_cowcopy(const char __user *src, const char __user *dest)
 	struct nameidata nd;
 	dev_t s_dev_src, s_dev_dest;
 
+    //printk ("### sys_ext4_cowcopy is called, src: %s, dest: %s\n", src, dest);
     printk ("### sys_ext4_cowcopy is called\n");
 
     //get the kstat info of the src
-    if ( vfs_stat(src, &kstat) != 0) {
+    if (vfs_stat(src, &kstat) != 0) {
         printk ("### %s doesn't exist.\n", src);
         return -EPERM;
     }
@@ -43,22 +44,37 @@ asmlinkage int sys_ext4_cowcopy(const char __user *src, const char __user *dest)
     printk("### stat.dev: %llu \n", (unsigned long long)kstat.dev);
     printk("### stat.mode: %llu \n", (unsigned long long)kstat.mode);
 
-	if (0 != kern_path_parent(src, &nd)){
-		printk("### kern_path_parent failed\n");
+
+    //check if src is in ext4 fs
+	if (kern_path_parent(src, &nd)!=0){
+		//this err shouldn't occur since src has been verified by vfs_stat, or
+		//we misunderstand the function
+		printk("### kern_path_parent failed when checking if src is in ext4 (This err shouldn't occur)\n");
+		return -999;
 	}
-	else {
-		printk ("### file type: %s\n", nd.inode->i_sb->s_type->name);
+	else{
+		if (strcmp(nd.inode->i_sb->s_type->name,"ext4"))
+		{
+			printk ("### src isn't ext4 fs, it's in: %s\n", nd.inode->i_sb->s_type->name);
+			return -EOPNOTSUPP;
+		}
+		printk ("### src is in the fs of: %s\n", nd.inode->i_sb->s_type->name);
 	}
 
+	//check if src and dest are in the same device
 	s_dev_src = nd.inode->i_sb->s_dev;
-
-	if(0 != kern_path_parent(dest, &nd)){
-		printk("### kern_path_parent failed\n");
+	if( kern_path_parent(dest, &nd) != 0){
+		//incorrect dest parameter. what should we return? 
+		//Todo: we should check if dest is a file.
+		printk("### kern_path_parent failed when checking dest, dest: %s\n", dest);
+		return -EINVAL;
 	}else{
 		s_dev_dest = nd.inode->i_sb->s_dev;
-		printk("### s_dev_src: %lu, s_dev_dest: %lu\n", (unsigned long)s_dev_src, (unsigned long)s_dev_dest);
-		if( s_dev_src != s_dev_dest){
+		printk("### s_dev_src: %lu, s_dev_dest: %lu\n", 
+			(unsigned long)s_dev_src, (unsigned long)s_dev_dest);
+		if(s_dev_src != s_dev_dest){
 			printk("### src and dest are in different device\n");
+			return -EXDEV;
 		}
 	}
 
