@@ -9,6 +9,7 @@
 #include <asm/stat.h>
 #include <linux/stat.h>
 #include <linux/unistd.h>
+#include <linux/namei.h>
 
 //#include <linux/limits.h>
 //#include <linux/ioctl.h>
@@ -22,6 +23,7 @@ extern int vfs_stat(const char __user *, struct kstat *);
 asmlinkage int sys_ext4_cowcopy(const char __user *src, const char __user *dest){
 	//struct __old_kernel_stat st_buf;
 	struct kstat kstat;
+	struct nameidata nd;
 
     printk ("### sys_ext4_cowcopy is called\n");
 
@@ -35,14 +37,18 @@ asmlinkage int sys_ext4_cowcopy(const char __user *src, const char __user *dest)
     printk("### stat.mode: %llu \n", (unsigned long long)kstat.mode);
 
 
-    // if (!S_ISREG (st_buf.st_mode)) {
-    //     printk ("%s is not a regular file.\n", src);
-    //     return -EPERM;
-    // }
-    // if (S_ISDIR (st_buf.st_mode)) {
-    //     printk ("%s is a directory.\n", src);
-    //     return -EPERM;
-    // }
+    if (!S_ISREG (kstat.mode) || S_ISDIR (kstat.mode)) {
+        printk ("%s is not a regular file or is a directory.\n", src);
+        return -EPERM;
+    }
+
+	if (0 != kern_path_parent(src, &nd)){
+		printk("do_path_lookup failed\n");
+	}
+	else {
+		printk ("file type: %s\n", nd.inode->i_sb->s_type->name);
+	}
+
 
 	return ext4_cowcopy(src, dest);
 }
