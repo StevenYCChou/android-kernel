@@ -53,8 +53,7 @@ asmlinkage int sys_ext4_cowcopy(const char __user *src, const char __user *dest)
 		return -999;
 	}
 	else{
-		if (strcmp(nd.inode->i_sb->s_type->name,"ext4"))
-		{
+		if (strcmp(nd.inode->i_sb->s_type->name,"ext4")){
 			printk ("### src isn't ext4 fs, it's in: %s\n", nd.inode->i_sb->s_type->name);
 			return -EOPNOTSUPP;
 		}
@@ -95,6 +94,9 @@ int  ext4_cowcopy(const char __user *src, const char __user *dest){
     
     int res;
     
+    //note: once get file or path struct, we can use the follwoing method:  
+    //e.g. file->f_path.dentry->d_parent->d_name.name
+
     res = kern_path(src, LOOKUP_FOLLOW, &src_path);
     if(res)
         printk("### some error when lookup src path: %s\n", src);
