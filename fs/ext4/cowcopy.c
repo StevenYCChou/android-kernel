@@ -112,10 +112,27 @@ int  ext4_cowcopy(const char __user *src, const char __user *dest){
  //    	printk("src_parent_nd.inode is blank\n");
  //    if (!dest_dentry)
  //    	printk("dest_dentry is blank\n");
+	struct path src_path, dest_path;
+	int res;
+	res = kern_path(src, LOOKUP_FOLLOW, &src_path);
+	if (res)
+		printk("### some error when lookup src path: %s\n", src);
+
 
     printk("### begin of hardlink between src: %s and dest: %s\n", src, dest);
     // src_path.dentry->d_inode->i_op->link(src_path.dentry, src_parent_nd.inode, dest_dentry);
     sys_linkat(AT_FDCWD, src, AT_FDCWD, dest, 0);
+
+    res = kern_path(dest, LOOKUP_FOLLOW, &dest_path);
+    if (res)
+    	printk("### some error when lookup dest path: %s\n", dest);
+
+    res = src_path.dentry->d_inode->i_op->setxattr(src_path.dentry, "trusted.cowcopy", 0, 0, 0);
+	printk("### setxattr returned: %d\n", res); 
+	
+	res = src_path.dentry->d_inode->i_op->getxattr(src_path.dentry, "trusted.cowcopy", 0, 0);
+	printk("### getxattr returned: %d\n", res);
+
     printk("### end of hardlink between src: %s and dest: %s\n", src, dest);
     
 	return 0;
