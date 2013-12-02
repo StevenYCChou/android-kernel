@@ -30,11 +30,7 @@
 #include "acl.h"
 
 
-//Create the new instance of the cow file, since it's being wirtten
-//(Note: The new file should have no cowcopy xattr)
-static int create_new_file_of_cow(void){
-	return 0;
-}
+
 
 
 /*
@@ -174,8 +170,7 @@ static int ext4_file_open(struct inode * inode, struct file * filp)
 	struct vfsmount *mnt = filp->f_path.mnt;
 	struct path path;
 	char buf[64], *cp;
-	//------ our parameters -------------
-	struct dentry *file_dentry = NULL;
+	
 
 	if (unlikely(!(sbi->s_mount_flags & EXT4_MF_MNTDIR_SAMPLED) &&
 		     !(sb->s_flags & MS_RDONLY))) {
@@ -197,47 +192,7 @@ static int ext4_file_open(struct inode * inode, struct file * filp)
 		}
 	}
 
-	//handle cow files (Maybe we should move this to the toppest level of open?
-	// or unlink probably will fail...)
-	if(filp->f_mode & FMODE_WRITE){
-		printk("### The file is open in write mode.\n");
-
-		file_dentry = filp->f_path.dentry;
-
-		if(inode->i_op->getxattr(file_dentry, "cowcopy", NULL, 0) > 0){
-			printk("### The file has cowcopy xattr.\n");
-			
-			//create new file of cow, the new file should have no cowcopy xattr
-			if(create_new_file_of_cow()){
-				printk("### Cannot create new file when writing on a cow file.\n");
-				return -ENOMEM;
-			}
-			printk("### Successfully create new file when writing on a cow file.\n");
-			
-			//Point the current file to the new inode?
-
-			//unlink the orignal cow file (todo: conditional judgement)
-			if(inode->i_op->unlink(file_dentry->d_parent->d_inode, file_dentry) != 0){
-				printk("### Cannot unlink the cow file.\n");
-				return -999;
-			}
-			printk("### Successfully unlink the cow file. The hard link of origin cow file becomes %d\n", inode->i_nlink);
-
-			//If the hard link count == 1, remove the cowcopy xattr of the file
-			if(inode->i_nlink == 1){
-				if(inode->i_op->removexattr(file_dentry,"cowcopy")){ // todo: conditional judgement
-					printk("Cannot remove cowcopy xattr of the cow file.\n");
-					return -999;
-				}
-				printk("### Successfully remove the cowcopy xattr of the file.\n");
-			}
-
-			//What about the writer count? What case should we deal with it?
-
-		}else{
-			printk("### The file has no cowcopy xattr\n");
-		}
-	}
+	
 
 	/*
 	 * Set up the jbd2_inode if we are opening the inode for
