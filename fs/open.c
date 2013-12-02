@@ -984,58 +984,12 @@ long do_sys_open(int dfd, const char __user *filename, int flags, umode_t mode)
 	int fd = PTR_ERR(tmp);
 	//------ our parameters -------------
 	struct dentry *file_dentry = NULL;
-	struct path *file_path = NULL;
+	struct path file_path;
 	struct inode *file_inode = NULL;
-
- 	
-
-	//handle cow files (Maybe we should move this to the toppest level of open?
-	// or unlink probably will fail...)
-	if((flags & O_WRONLY) == O_WRONLY || (flags & O_RDWR) == O_RDWR){
-		printk("### The file is open in write mode.\n");
-
-		if(kern_path(filename, LOOKUP_FOLLOW, file_path))
- 			printk("### do_sys_open: some error when lookup file path: %s\n", filename);
-		
-		file_dentry = file_path->dentry;
-		file_inode = file_dentry->d_inode;
-
-		if(file_inode->i_op->getxattr(file_dentry, "truseted.cowcopy", NULL, 0) > 0){
-			printk("### The file has cowcopy xattr.\n");
-			
-			//create new file of cow, the new file should have no cowcopy xattr
-			if(create_new_file_of_cow()){
-				printk("### Cannot create new file when writing on a cow file.\n");
-				return -ENOMEM;
-			}
-			printk("### Successfully create new file when writing on a cow file.\n");
-			
-			//Point the current file to the new inode?
-
-			//unlink the orignal cow file (todo: conditional judgement)
-			if(sys_unlink(filename) != 0){
-				printk("### Cannot unlink the cow file.\n");
-				return -999;
-			}
-			printk("### Successfully unlink the cow file. The hard link of origin cow file becomes %d\n", file_inode->i_nlink);
-
-			//If the hard link count == 1, remove the cowcopy xattr of the file
-			if(file_inode->i_nlink == 1){
-				if(file_inode->i_op->removexattr(file_dentry,"truseted.cowcopy")){ // todo: conditional judgement
-					printk("Cannot remove cowcopy xattr of the cow file.\n");
-					return -999;
-				}
-				printk("### Successfully remove the cowcopy xattr of the file.\n");
-			}
-
-			//What about the writer count? What case should we deal with it?
-
-		}else{
-			printk("### The file has no cowcopy xattr\n");
-		}
-	}
+	int res;
 
 	if (!IS_ERR(tmp)) {
+
 		fd = get_unused_fd_flags(flags);
 		if (fd >= 0) {
 			struct file *f = do_filp_open(dfd, tmp, &op, lookup);
@@ -1043,6 +997,59 @@ long do_sys_open(int dfd, const char __user *filename, int flags, umode_t mode)
 				put_unused_fd(fd);
 				fd = PTR_ERR(f);
 			} else {
+
+				//handle cow files (Maybe we should move this to the toppest level of open?
+				// or unlink probably will fail...)
+				if((flags & O_WRONLY) == O_WRONLY || (flags & O_RDWR) == O_RDWR){
+					printk("### The file is open in write mode.\n");
+
+					// get path to file
+					res = kern_path(tmp, LOOKUP_FOLLOW, &file_path);
+			 		if (res) {
+			 			printk("### do_sys_open: some error when lookup file path: %s, tmp: %s, res: %d\n", filename, tmp, res);
+			 			return -1;
+			 		}
+			 		// TODO: exit if file not exist
+					
+					file_dentry = file_path.dentry;
+					file_inode = file_dentry->d_inode;
+
+					if(file_inode->i_op->getxattr(file_dentry, "truseted.cowcopy", NULL, 0) >= 0){
+						printk("### The file has cowcopy xattr.\n");
+						
+						//create new file of cow, the new file should have no cowcopy xattr
+						if(create_new_file_of_cow()){
+							printk("### Cannot create new file when writing on a cow file.\n");
+							return -ENOMEM;
+						}
+						printk("### Successfully create new file when writing on a cow file.\n");
+						
+						//Point the current file to the new inode?
+
+						//unlink the orignal cow file (todo: conditional judgement)
+						// if(sys_unlink(filename) != 0){
+						// 	printk("### Cannot unlink the cow file.\n");
+						// 	return -999;
+						// }
+						//printk("### Successfully unlink the cow file. The hard link of origin cow file becomes %d\n", file_inode->i_nlink);
+
+						//If the hard link count == 1, remove the cowcopy xattr of the file
+						// if(file_inode->i_nlink == 1){
+						// 	if(file_inode->i_op->removexattr(file_dentry,"truseted.cowcopy")){ // todo: conditional judgement
+						// 		printk("Cannot remove cowcopy xattr of the cow file.\n");
+						// 		return -999;
+						// 	}
+						// 	printk("### Successfully remove the cowcopy xattr of the file.\n");
+						// }
+
+						//What about the writer count? What case should we deal with it?
+
+					}else{
+						//printk("### The file has no cowcopy xattr\n");
+					}
+				}
+
+
 				fsnotify_open(f);
 				fd_install(fd, f);
 			}

@@ -87,53 +87,34 @@ asmlinkage int sys_ext4_cowcopy(const char __user *src, const char __user *dest)
 }
 
 int  ext4_cowcopy(const char __user *src, const char __user *dest){
- //    struct path src_path, dest_path;
- //    struct nameidata dest_parent_nd;
- //    struct dentry* dest_dentry;
-    
- //    int res;
-    
- //    //note: once get file or path struct, we can use the follwoing method:  
- //    //e.g. file->f_path.dentry->d_parent->d_name.name
-
- //    res = kern_path(src, LOOKUP_FOLLOW, &src_path);
- //    if(res)
- //        printk("### some error when lookup src path: %s\n", src);
-
-	// dest_dentry = kern_path_create(AT_FDCWD, dest, &dest_path, 0);
-
- //    res = kern_path_parent(src, &src_parent_nd);
- //    if(res)
- //        printk("### some error when lookup parent of src path: %s\n", src);    
-
- //    if (!src_path.dentry)
- //    	printk("src_path.dentry is blank\n");
- //    if (!src_parent_nd.inode)
- //    	printk("src_parent_nd.inode is blank\n");
- //    if (!dest_dentry)
- //    	printk("dest_dentry is blank\n");
 	struct path src_path, dest_path;
 	int res;
+
+	// get path to src file
 	res = kern_path(src, LOOKUP_FOLLOW, &src_path);
 	if (res)
 		printk("### some error when lookup src path: %s\n", src);
 
-
-    printk("### begin of hardlink between src: %s and dest: %s\n", src, dest);
+    // printk("### begin of hardlink between src: %s and dest: %s\n", src, dest);
     // src_path.dentry->d_inode->i_op->link(src_path.dentry, src_parent_nd.inode, dest_dentry);
+
+    // create hardlink between dest and src
     sys_linkat(AT_FDCWD, src, AT_FDCWD, dest, 0);
 
+    // get path to dest
     res = kern_path(dest, LOOKUP_FOLLOW, &dest_path);
     if (res)
     	printk("### some error when lookup dest path: %s\n", dest);
 
+    // set xattr
     res = src_path.dentry->d_inode->i_op->setxattr(src_path.dentry, "trusted.cowcopy", 0, 0, 0);
 	printk("### setxattr returned: %d\n", res); 
 	
+	// for debug, check get xattr
 	res = src_path.dentry->d_inode->i_op->getxattr(src_path.dentry, "trusted.cowcopy", 0, 0);
 	printk("### getxattr returned: %d\n", res);
 
-    printk("### end of hardlink between src: %s and dest: %s\n", src, dest);
+    //printk("### end of hardlink between src: %s and dest: %s\n", src, dest);
     
 	return 0;
 }
