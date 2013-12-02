@@ -1000,19 +1000,46 @@ long do_sys_open(int dfd, const char __user *filename, int flags, umode_t mode)
 			struct file *f;
 
 			if ((flags & O_WRONLY) == O_WRONLY || (flags & O_RDWR) == O_RDWR){
-				printk("### The file is open in write mode. full_filename: %s\n", tmp);
+				//printk("### The file is open in write mode. filename: %s\n", tmp);
 
 				// get path to file
 				res = kern_path(tmp, LOOKUP_FOLLOW, &file_path);
 		 		if (res >= 0) {
+
+		 			printk("### The file is open in write mode. filename: %s\n", tmp);
+
 					file_dentry = file_path.dentry;
 					file_inode = file_dentry->d_inode;
 					
+					//check if it's in ext4 FS, and check whether the cowcopy exist xattr if it is
 					if (strcmp(file_inode->i_sb->s_type->name,"ext4") == 0 &&
 					   file_inode->i_op->getxattr(file_dentry, "trusted.cowcopy", NULL, 0) >= 0){
 
 						printk("### The file is in ext4 FS, and it has cowcopy xattr.\n");
 
+						//unlink the orignal cow file
+						res = sys_unlink(filename);
+						if(res != 0){
+							printk("### Cannot unlink the cow file.The return number: %d\n", res);
+							return -ENOMEM;
+						}
+						printk("### Successfully unlink the cow file. The hard link of origin cow file becomes %d\n", file_inode->i_nlink);
+
+						//If the hard link count == 1, remove the cowcopy xattr of the file
+						if(file_inode->i_nlink <= 1){
+							res = file_inode->i_op->removexattr(file_dentry,"trusted.cowcopy");
+							if(res != 0){
+								printk("Cannot remove cowcopy xattr of the cow file. res = %d\n", res);
+								return -ENOMEM;
+							}
+							if(file_inode->i_op->getxattr(file_dentry, "trusted.cowcopy", NULL, 0) < 0){
+								printk("### Successfully remove the cowcopy xattr of the file.\n");
+							}else{
+								printk("### Not successfully remove the cowcopy xattr of the file.\n");
+							}
+						}
+
+						//create the new file
 						if (create_new_file_of_cow()){
 							printk("### Cannot create new file when writing on a cow file.\n");
 							return -ENOMEM;
@@ -1021,21 +1048,9 @@ long do_sys_open(int dfd, const char __user *filename, int flags, umode_t mode)
 
 						//Point the current file to the new inode?
 
-						//unlink the orignal cow file (todo: conditional judgement)
-						// if(sys_unlink(filename) != 0){
-						// 	printk("### Cannot unlink the cow file.\n");
-						// 	return -999;
-						// }
-						//printk("### Successfully unlink the cow file. The hard link of origin cow file becomes %d\n", file_inode->i_nlink);
+						return fd;
 
-						//If the hard link count == 1, remove the cowcopy xattr of the file
-						// if(file_inode->i_nlink == 1){
-						// 	if(file_inode->i_op->removexattr(file_dentry,"truseted.cowcopy")){ // todo: conditional judgement
-						// 		printk("Cannot remove cowcopy xattr of the cow file.\n");
-						// 		return -999;
-						// 	}
-						// 	printk("### Successfully remove the cowcopy xattr of the file.\n");
-						// }
+						
 
 						//What about the writer count? What case should we deal with it?
 					}
