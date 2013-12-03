@@ -37,9 +37,9 @@
 
 //Create the new instance of the cow file, since it's being wirtten
 //(Note: The new file should have no cowcopy xattr)
-static int create_new_file_of_cow(void){
-	return 0;
-}
+//static int create_new_file_of_cow(void){
+//	return 0;
+//}
 
 int do_truncate(struct dentry *dentry, loff_t length, unsigned int time_attrs,
 	struct file *filp)
@@ -978,103 +978,131 @@ struct file *file_open_root(struct dentry *dentry, struct vfsmount *mnt,
 }
 EXPORT_SYMBOL(file_open_root);
 
-long do_sys_open(int dfd, const char __user *filename, int flags, umode_t mode)
+long __do_sys_open(int dfd, const char __user *filename, const char *tmp, int flags, umode_t mode)
 {
 	struct open_flags op;
 	int lookup = build_open_flags(flags, mode, &op);
-	char *tmp = getname(filename);
 	int fd = PTR_ERR(tmp);
+	int origin_fd, cow_fd;
+	struct file *f;
 	//------ our parameters -------------
 	struct dentry *file_dentry = NULL;
 	struct path file_path;
 	struct inode *file_inode = NULL;
+	//struct address_space *mapping = NULL;
+	//LIST_HEAD(page_pool);
 	int res;
 	
 
+	fd = get_unused_fd_flags(flags);
+	if (fd >= 0) {
 
-	if (!IS_ERR(tmp)) {
+		if ((flags & O_WRONLY) == O_WRONLY || (flags & O_RDWR) == O_RDWR){
+			//printk("### The file is open in write mode. filename: %s\n", tmp);
 
-		fd = get_unused_fd_flags(flags);
-		if (fd >= 0) {
+			// get path to file
+			res = kern_path(tmp, LOOKUP_FOLLOW, &file_path);
+	 		if (res >= 0) {
 
-			struct file *f;
+	 			printk("### The file is open in write mode. filename: %s\n", tmp);
 
-			if ((flags & O_WRONLY) == O_WRONLY || (flags & O_RDWR) == O_RDWR){
-				//printk("### The file is open in write mode. filename: %s\n", tmp);
+				file_dentry = file_path.dentry;
+				file_inode = file_dentry->d_inode;
+				
+				//check if it's in ext4 FS, and check whether the cowcopy exist xattr if it is
+				if (strcmp(file_inode->i_sb->s_type->name,"ext4") == 0 &&
+				   file_inode->i_op->getxattr(file_dentry, "trusted.cowcopy", NULL, 0) >= 0){
 
-				// get path to file
-				res = kern_path(tmp, LOOKUP_FOLLOW, &file_path);
-		 		if (res >= 0) {
+					char *cow_tmp = (char*) kmalloc(strlen(tmp)+2, GFP_KERNEL);
 
-		 			printk("### The file is open in write mode. filename: %s\n", tmp);
+					printk("### The file is in ext4 FS, and it has cowcopy xattr.\n");
 
-					file_dentry = file_path.dentry;
-					file_inode = file_dentry->d_inode;
+					//read pages from this path
+					//f = do_filp_open(dfd, tmp, &op, lookup);
+					//printk("### do_filp_open: filepath of file: %s\n", f->f_path.dentry->d_name.name);
+					//mapping = file_inode->i_mapping;
+					//res = mapping->a_ops->readpages(f, mapping, &page_pool, mapping->nrpages);
 					
-					//check if it's in ext4 FS, and check whether the cowcopy exist xattr if it is
-					if (strcmp(file_inode->i_sb->s_type->name,"ext4") == 0 &&
-					   file_inode->i_op->getxattr(file_dentry, "trusted.cowcopy", NULL, 0) >= 0){
+					strcpy(cow_tmp, tmp);
+					strcat(cow_tmp, "~");
+					printk("### cow_tmp: %s\n", cow_tmp);
+					
+					origin_fd = __do_sys_open(dfd, NULL, tmp, O_RDONLY, mode);
+					cow_fd = __do_sys_open(dfd, NULL, cow_tmp, O_CREAT | O_WRONLY | O_TRUNC, mode);
+					sys_sendfile(cow_fd, origin_fd, NULL, (size_t) file_inode->i_size);
+					sys_close(origin_fd);
+					sys_close(cow_fd);
+					kfree(cow_tmp);
 
-						printk("### The file is in ext4 FS, and it has cowcopy xattr.\n");
-
-						//unlink the orignal cow file
-						res = sys_unlink(filename);
-						if(res != 0){
-							printk("### Cannot unlink the cow file.The return number: %d\n", res);
-							return -ENOMEM;
-						}
-						printk("### Successfully unlink the cow file. The hard link of origin cow file becomes %d\n", file_inode->i_nlink);
-
-						//If the hard link count == 1, remove the cowcopy xattr of the file
-						if(file_inode->i_nlink <= 1){
-							res = file_inode->i_op->removexattr(file_dentry,"trusted.cowcopy");
-							if(res != 0){
-								printk("Cannot remove cowcopy xattr of the cow file. res = %d\n", res);
-								return -ENOMEM;
-							}
-							if(file_inode->i_op->getxattr(file_dentry, "trusted.cowcopy", NULL, 0) < 0){
-								printk("### Successfully remove the cowcopy xattr of the file.\n");
-							}else{
-								printk("### Not successfully remove the cowcopy xattr of the file.\n");
-							}
-						}
-
-						//create the new file
-						if (create_new_file_of_cow()){
-							printk("### Cannot create new file when writing on a cow file.\n");
-							return -ENOMEM;
-						}
-						printk("### Successfully create new file when writing on a cow file.\n");
-
-						//Point the current file to the new inode?
-
-						return fd;
-
-						
-
-						//What about the writer count? What case should we deal with it?
+					if(res != 0){
+						printk("### Cannot read pages from file.The return number: %d\n", res);
+						return -ENOMEM;
 					}
-				}else{
-					printk("### do_sys_open: some error when lookup filename: %s, tmp: %s, res: %d\n", filename, tmp, res);
 
+					//unlink the orignal cow file
+					//printk("### dentry of parent name:%s\n", file_dentry->d_parent->d_name.name);
+					//res = file_inode->i_op->unlink(file_dentry->d_parent->d_inode, file_dentry);
+					res = sys_unlink(filename);
+
+					if(res != 0){
+						printk("### Cannot unlink the cow file.The return number: %d\n", res);
+						return -ENOMEM;
+					}
+					printk("### Successfully unlink the cow file. The hard link of origin cow file becomes %d\n", file_inode->i_nlink);
+					
+					//If the hard link count == 1, remove the cowcopy xattr of the file
+					if(file_inode->i_nlink <= 1){
+						res = file_inode->i_op->removexattr(file_dentry,"trusted.cowcopy");
+						if(res != 0){
+							printk("Cannot remove cowcopy xattr of the cow file. res = %d\n", res);
+							return -ENOMEM;
+						}
+						if(file_inode->i_op->getxattr(file_dentry, "trusted.cowcopy", NULL, 0) < 0){
+							printk("### Successfully remove the cowcopy xattr of the file.\n");
+						}else{
+							printk("### Not successfully remove the cowcopy xattr of the file.\n");
+						}
+					}
+
+					//Point the current file to the new inode?
+
+					return fd;
+
+					
+
+					//What about the writer count? What case should we deal with it?
 				}
+			}else{
+				//printk("### do_sys_open: some error when lookup filename: %s, tmp: %s, res: %d\n", filename, tmp, res);
 
 			}
 
-			f = do_filp_open(dfd, tmp, &op, lookup);
-			if (IS_ERR(f)) {
-				put_unused_fd(fd);
-				fd = PTR_ERR(f);
-			} else {
-
-				fsnotify_open(f);
-				fd_install(fd, f);
-			}
 		}
-		putname(tmp);
+
+		f = do_filp_open(dfd, tmp, &op, lookup);
+		if (IS_ERR(f)) {
+			put_unused_fd(fd);
+			fd = PTR_ERR(f);
+		} else {
+
+			fsnotify_open(f);
+			fd_install(fd, f);
+		}
 	}
 
 	
+	return fd;
+}
+
+
+long do_sys_open(int dfd, const char __user *filename, int flags, umode_t mode)
+{
+	int fd = 0;
+	char *tmp = getname(filename);
+	if (!IS_ERR(tmp)) {
+		fd = __do_sys_open(dfd, filename, tmp, flags, mode);
+		putname(tmp);
+	}
 	return fd;
 }
 
