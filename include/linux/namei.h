@@ -109,4 +109,6 @@ static inline void nd_terminate_link(void *name, size_t len, size_t maxlen)
 	((char *) name)[min(len, maxlen)] = '\0';
 }
 
+struct dentry* my_lookup_hash(struct nameidata *nd);
+
 #endif /* _LINUX_NAMEI_H */

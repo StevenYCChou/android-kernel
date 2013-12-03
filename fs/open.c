@@ -41,6 +41,73 @@
 //	return 0;
 //}
 
+int my_rename(const char* old_name, const char* new_name){
+	struct dentry *old_dir, *new_dir;
+	struct dentry *old_dentry, *new_dentry;
+	struct dentry *trap;
+
+	struct nameidata old_nd, new_nd;
+	int error;
+	
+	printk("old_name:%s, new_name:%s\n", old_name, new_name);
+	error = kern_path_parent(old_name, &old_nd);
+	if(error)
+		printk("### err when kern_path_parent old.\n");
+
+	error = kern_path_parent(new_name, &new_nd);
+	if(error)
+		printk("### err when kern_path_parent new.\n");
+
+	printk("### both kern_path_parent finished\n");
+
+	old_dir = old_nd.path.dentry;
+	new_dir = new_nd.path.dentry;
+
+	printk("### obtained old and new dir finished\n");
+
+	old_nd.flags &= ~LOOKUP_PARENT;
+	new_nd.flags &= ~LOOKUP_PARENT;
+	new_nd.flags |= ~LOOKUP_RENAME_TARGET;
+
+	trap = lock_rename(new_dir, old_dir);
+
+	printk("### trap finished\n"); 
+
+	old_dentry = my_lookup_hash(&old_nd);
+	new_dentry = my_lookup_hash(&new_nd);
+
+
+	error = mnt_want_write(old_nd.path.mnt);
+	if(error)
+		printk("### err when mnt_want_write.\n");
+
+	error = security_path_rename(&old_nd.path, old_dentry,
+								 &new_nd.path, new_dentry);
+
+	if(error)
+		printk("### err when security_path_rename.\n");
+
+	error = vfs_rename(old_dir->d_inode, old_dentry, new_dir->d_inode, new_dentry);
+
+	if(error)
+		printk("### err when vfs_rename.\n");
+	
+	printk("### vfs_rename end.\n");
+
+	
+	mnt_drop_write(old_nd.path.mnt);
+	dput(new_dentry);
+	dput(old_dentry);
+	unlock_rename(new_dir, old_dir);
+	path_put(&new_nd.path);
+	path_put(&old_nd.path);	
+	
+
+	printk("### rename function end\n");
+
+	return error;
+}
+
 int do_truncate(struct dentry *dentry, loff_t length, unsigned int time_attrs,
 	struct file *filp)
 {
@@ -998,7 +1065,6 @@ long __do_sys_open(int dfd, const char __user *filename, const char *tmp, int fl
 	if (fd >= 0) {
 
 		if ((flags & O_WRONLY) == O_WRONLY || (flags & O_RDWR) == O_RDWR){
-			//printk("### The file is open in write mode. filename: %s\n", tmp);
 
 			// get path to file
 			res = kern_path(tmp, LOOKUP_FOLLOW, &file_path);
@@ -1014,30 +1080,21 @@ long __do_sys_open(int dfd, const char __user *filename, const char *tmp, int fl
 				   file_inode->i_op->getxattr(file_dentry, "trusted.cowcopy", NULL, 0) >= 0){
 
 					char *cow_tmp = (char*) kmalloc(strlen(tmp)+2, GFP_KERNEL);
+					
 
 					printk("### The file is in ext4 FS, and it has cowcopy xattr.\n");
-
-					//read pages from this path
-					//f = do_filp_open(dfd, tmp, &op, lookup);
-					//printk("### do_filp_open: filepath of file: %s\n", f->f_path.dentry->d_name.name);
-					//mapping = file_inode->i_mapping;
-					//res = mapping->a_ops->readpages(f, mapping, &page_pool, mapping->nrpages);
 					
+					//create a temporal file name with '~'' in the end
 					strcpy(cow_tmp, tmp);
 					strcat(cow_tmp, "~");
 					printk("### cow_tmp: %s\n", cow_tmp);
 					
+					//copy the original file to temporal file
 					origin_fd = __do_sys_open(dfd, NULL, tmp, O_RDONLY, mode);
 					cow_fd = __do_sys_open(dfd, NULL, cow_tmp, O_CREAT | O_WRONLY | O_TRUNC, mode);
 					sys_sendfile(cow_fd, origin_fd, NULL, (size_t) file_inode->i_size);
 					sys_close(origin_fd);
 					sys_close(cow_fd);
-					kfree(cow_tmp);
-
-					if(res != 0){
-						printk("### Cannot read pages from file.The return number: %d\n", res);
-						return -ENOMEM;
-					}
 
 					//unlink the orignal cow file
 					//printk("### dentry of parent name:%s\n", file_dentry->d_parent->d_name.name);
@@ -1046,10 +1103,12 @@ long __do_sys_open(int dfd, const char __user *filename, const char *tmp, int fl
 
 					if(res != 0){
 						printk("### Cannot unlink the cow file.The return number: %d\n", res);
+						kfree(cow_tmp);
 						return -ENOMEM;
 					}
 					printk("### Successfully unlink the cow file. The hard link of origin cow file becomes %d\n", file_inode->i_nlink);
 					
+
 					//If the hard link count == 1, remove the cowcopy xattr of the file
 					if(file_inode->i_nlink <= 1){
 						res = file_inode->i_op->removexattr(file_dentry,"trusted.cowcopy");
@@ -1064,19 +1123,44 @@ long __do_sys_open(int dfd, const char __user *filename, const char *tmp, int fl
 						}
 					}
 
-					//Point the current file to the new inode?
+					dput(file_dentry);
 
-					return fd;
+					res = my_rename(cow_tmp, tmp);
+					if(res != 0){
+						printk("### failed when rename the file.The return number: %d\n", res);
+						kfree(cow_tmp);
+						return -ENOMEM;
+					}
+					printk("### rename done. res:%d\n", res);
 
-					
+					res = kern_path(tmp, LOOKUP_FOLLOW, &file_path);
 
-					//What about the writer count? What case should we deal with it?
+					file_dentry = file_path.dentry;
+					file_inode = file_dentry->d_inode;
+
+					//remove the cowcopy xattr if there is
+					//new_file_inode = new_dentry->d_inode;
+					if(file_inode->i_op->getxattr(file_dentry, "trusted.cowcopy", NULL, 0) >= 0){
+						printk("### The new file has cowcopy xattr of the file.\n");
+
+						res = file_inode->i_op->removexattr(file_dentry,"trusted.cowcopy");
+						if(res != 0){
+							printk("### Cannot remove cowcopy xattr of the cow file. res = %d\n", res);
+							dput(file_dentry);
+							return -ENOMEM;
+						}
+						if(file_inode->i_op->getxattr(file_dentry, "trusted.cowcopy", NULL, 0) < 0){
+							printk("### Successfully remove the cowcopy xattr of the file.\n");
+						}else{
+							printk("### Not successfully remove the cowcopy xattr of the file.\n");
+						}
+					}else{
+						printk("### The new file has no cowcopy xattr of the file.\n");
+					}
+					dput(file_dentry);
+					kfree(cow_tmp);
 				}
-			}else{
-				//printk("### do_sys_open: some error when lookup filename: %s, tmp: %s, res: %d\n", filename, tmp, res);
-
 			}
-
 		}
 
 		f = do_filp_open(dfd, tmp, &op, lookup);
