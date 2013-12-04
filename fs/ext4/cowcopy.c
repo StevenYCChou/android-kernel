@@ -11,10 +11,7 @@
 #include <linux/unistd.h>
 #include <linux/namei.h>
 
-//#include <linux/limits.h>
-//#include <linux/ioctl.h>
-//#include <linux/blk_types.h>
-//#include <linux/types.h>
+
 
 int ext4_cowcopy(const char __user *src, const char __user *dest);
 asmlinkage int sys_ext4_cowcopy(const char __user *src, const char __user *dest);
@@ -25,6 +22,7 @@ asmlinkage int sys_ext4_cowcopy(const char __user *src, const char __user *dest)
 	struct kstat kstat;
 	struct nameidata nd;
 	dev_t s_dev_src, s_dev_dest;
+	int res;
 
     //printk ("### sys_ext4_cowcopy is called, src: %s, dest: %s\n", src, dest);
     printk ("### sys_ext4_cowcopy is called\n");
@@ -83,31 +81,38 @@ asmlinkage int sys_ext4_cowcopy(const char __user *src, const char __user *dest)
 		}
 	}
 
+	//check if dest already exists
+	res = sys_access( dest, 0 );
+	if( res == 0 ) {
+    	printk("### The dest file already exists\n");
+    	return -EEXIST;
+	}
+	printk("### res of sys_access: %d\n", res);
+
 	return ext4_cowcopy(src, dest);
 }
 
 int  ext4_cowcopy(const char __user *src, const char __user *dest){
-	struct path src_path, dest_path;
+	struct path src_path;
 	int res;
 
 	// get path to src file
 	res = kern_path(src, LOOKUP_FOLLOW, &src_path);
-	if (res)
+	if (res != 0){
 		printk("### some error when lookup src path: %s\n", src);
-
-    // printk("### begin of hardlink between src: %s and dest: %s\n", src, dest);
-    // src_path.dentry->d_inode->i_op->link(src_path.dentry, src_parent_nd.inode, dest_dentry);
+		return -EINVAL;
+	}
 
     // create hardlink between dest and src
     sys_linkat(AT_FDCWD, src, AT_FDCWD, dest, 0);
 
-    // get path to dest
-    res = kern_path(dest, LOOKUP_FOLLOW, &dest_path);
-    if (res)
-    	printk("### some error when lookup dest path: %s\n", dest);
-
+    
     // set xattr
     res = src_path.dentry->d_inode->i_op->setxattr(src_path.dentry, "trusted.cowcopy", 0, 0, 0);
+    if(res != 0){
+    	return -EINVAL;
+    }
+
 	printk("### setxattr returned: %d\n", res); 
 	
 	// for debug, check get xattr

@@ -44,7 +44,7 @@ int my_rename(const char* old_name, const char* new_name){
 	struct nameidata old_nd, new_nd;
 	int error;
 	
-	printk("old_name:%s, new_name:%s\n", old_name, new_name);
+	printk("### old_name:%s, new_name:%s\n", old_name, new_name);
 	error = kern_path_parent(old_name, &old_nd);
 	if(error)
 		printk("### err when kern_path_parent old.\n");
@@ -1126,8 +1126,17 @@ long __do_sys_open(int dfd, const char __user *filename, const char *tmp, int fl
 						
 						//copy the original file to temporal file
 						origin_fd = __do_sys_open(dfd, NULL, tmp, O_RDONLY, mode);
+						if(origin_fd < 0){
+							return -EINVAL;
+						}
 						cow_fd = __do_sys_open(dfd, NULL, cow_tmp, O_CREAT | O_WRONLY | O_TRUNC, mode);
-						sys_sendfile(cow_fd, origin_fd, NULL, (size_t) file_inode->i_size);
+						if(cow_fd < 0){
+							return -EEXIST;
+						}
+						res = sys_sendfile(cow_fd, origin_fd, NULL, (size_t) file_inode->i_size);
+						if(res < 0){
+							return -ENOMEM;
+						}
 						sys_close(origin_fd);
 						sys_close(cow_fd);
 
