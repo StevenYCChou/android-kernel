@@ -35,12 +35,7 @@
 
 #include <linux/slab.h>
 
-//Create the new instance of the cow file, since it's being wirtten
-//(Note: The new file should have no cowcopy xattr)
-//static int create_new_file_of_cow(void){
-//	return 0;
-//}
-
+//rename a file
 int my_rename(const char* old_name, const char* new_name){
 	struct dentry *old_dir, *new_dir;
 	struct dentry *old_dentry, *new_dentry;
@@ -58,12 +53,12 @@ int my_rename(const char* old_name, const char* new_name){
 	if(error)
 		printk("### err when kern_path_parent new.\n");
 
-	printk("### both kern_path_parent finished\n");
+	//printk("### both kern_path_parent finished\n");
 
 	old_dir = old_nd.path.dentry;
 	new_dir = new_nd.path.dentry;
 
-	printk("### obtained old and new dir finished\n");
+	//printk("### obtained old and new dir finished\n");
 
 	old_nd.flags &= ~LOOKUP_PARENT;
 	new_nd.flags &= ~LOOKUP_PARENT;
@@ -71,7 +66,7 @@ int my_rename(const char* old_name, const char* new_name){
 
 	trap = lock_rename(new_dir, old_dir);
 
-	printk("### trap finished\n"); 
+	//printk("### trap finished\n"); 
 
 	old_dentry = my_lookup_hash(&old_nd);
 	new_dentry = my_lookup_hash(&new_nd);
@@ -92,7 +87,7 @@ int my_rename(const char* old_name, const char* new_name){
 	if(error)
 		printk("### err when vfs_rename.\n");
 	
-	printk("### vfs_rename end.\n");
+	//printk("### vfs_rename end.\n");
 
 	
 	mnt_drop_write(old_nd.path.mnt);
@@ -103,9 +98,35 @@ int my_rename(const char* old_name, const char* new_name){
 	path_put(&old_nd.path);	
 	
 
-	printk("### rename function end\n");
+	//printk("### rename function end\n");
 
 	return error;
+}
+
+//remove cowcopy xattr of the file if there is
+int remove_cowcopy_xattr(struct inode *file_inode, struct dentry *file_dentry){
+	if(file_inode->i_op->getxattr(file_dentry, "trusted.cowcopy", NULL, 0) >= 0){
+		int res;
+		printk("### The file %s has cowcopy xattr.\n", file_dentry->d_name.name);
+
+		res = file_inode->i_op->removexattr(file_dentry,"trusted.cowcopy");
+		if(res != 0){
+			printk("### Cannot remove cowcopy xattr of the cow file. res = %d\n", res);
+			return -EINVAL;
+		}
+
+		//-------------for debug--------------------------
+		if(file_inode->i_op->getxattr(file_dentry, "trusted.cowcopy", NULL, 0) < 0){
+			printk("### Successfully remove the cowcopy xattr of the file.\n");
+		}else{
+			printk("### Not successfully remove the cowcopy xattr of the file.\n");
+		}
+		//-------------end of debug------------------------
+	}else
+		printk("### The file %s has no cowcopy(or invalid arguments).\n", file_dentry->d_name.name);
+	
+	return 0;
+
 }
 
 int do_truncate(struct dentry *dentry, loff_t length, unsigned int time_attrs,
@@ -1050,14 +1071,12 @@ long __do_sys_open(int dfd, const char __user *filename, const char *tmp, int fl
 	struct open_flags op;
 	int lookup = build_open_flags(flags, mode, &op);
 	int fd = PTR_ERR(tmp);
-	int origin_fd, cow_fd;
 	struct file *f;
 	//------ our parameters -------------
 	struct dentry *file_dentry = NULL;
 	struct path file_path;
 	struct inode *file_inode = NULL;
-	//struct address_space *mapping = NULL;
-	//LIST_HEAD(page_pool);
+	int origin_fd, cow_fd;
 	int res;
 	
 
@@ -1068,9 +1087,9 @@ long __do_sys_open(int dfd, const char __user *filename, const char *tmp, int fl
 
 			// get path to file
 			res = kern_path(tmp, LOOKUP_FOLLOW, &file_path);
-	 		if (res >= 0) {
+	 		if (res == 0) {
 
-	 			printk("### The file is open in write mode. filename: %s\n", tmp);
+	 			//printk("### The file is open in write mode. filename: %s\n", tmp);
 
 				file_dentry = file_path.dentry;
 				file_inode = file_dentry->d_inode;
@@ -1079,86 +1098,85 @@ long __do_sys_open(int dfd, const char __user *filename, const char *tmp, int fl
 				if (strcmp(file_inode->i_sb->s_type->name,"ext4") == 0 &&
 				   file_inode->i_op->getxattr(file_dentry, "trusted.cowcopy", NULL, 0) >= 0){
 
-					char *cow_tmp = (char*) kmalloc(strlen(tmp)+2, GFP_KERNEL);
-					
+					printk("### The file is in ext4 FS, and it has cowcopy xattr. \n\tfilename: %s\n", tmp);
+				
 
-					printk("### The file is in ext4 FS, and it has cowcopy xattr.\n");
-					
-					//create a temporal file name with '~'' in the end
-					strcpy(cow_tmp, tmp);
-					strcat(cow_tmp, "~");
-					printk("### cow_tmp: %s\n", cow_tmp);
-					
-					//copy the original file to temporal file
-					origin_fd = __do_sys_open(dfd, NULL, tmp, O_RDONLY, mode);
-					cow_fd = __do_sys_open(dfd, NULL, cow_tmp, O_CREAT | O_WRONLY | O_TRUNC, mode);
-					sys_sendfile(cow_fd, origin_fd, NULL, (size_t) file_inode->i_size);
-					sys_close(origin_fd);
-					sys_close(cow_fd);
+				   	if(file_inode->i_nlink <= 1){
+				   		//If this happend, it's because there has been cow files being deleted
+				   		//We only remove the cowcopy xattr here
+				   		printk("### The file has cowcopy xattr but only one hardlink\n");
 
-					//unlink the orignal cow file
-					//printk("### dentry of parent name:%s\n", file_dentry->d_parent->d_name.name);
-					//res = file_inode->i_op->unlink(file_dentry->d_parent->d_inode, file_dentry);
-					res = sys_unlink(filename);
-
-					if(res != 0){
-						printk("### Cannot unlink the cow file.The return number: %d\n", res);
-						kfree(cow_tmp);
-						return -ENOMEM;
-					}
-					printk("### Successfully unlink the cow file. The hard link of origin cow file becomes %d\n", file_inode->i_nlink);
-					
-
-					//If the hard link count == 1, remove the cowcopy xattr of the file
-					if(file_inode->i_nlink <= 1){
-						res = file_inode->i_op->removexattr(file_dentry,"trusted.cowcopy");
+				   		//remove the file's cowcopy xattr
+						res = remove_cowcopy_xattr(file_inode, file_dentry);
 						if(res != 0){
-							printk("Cannot remove cowcopy xattr of the cow file. res = %d\n", res);
+							printk("### Failed when remove file's cowcopy xattr. res = %d\n", res);
+							return -EINVAL;
+						}
+
+				   	}else{
+
+						char *cow_tmp = (char*) kmalloc(strlen(tmp)+2, GFP_KERNEL);
+						
+
+						
+						//create a temporal file name with '~'' in the end
+						strcpy(cow_tmp, tmp);
+						strcat(cow_tmp, "~");
+						//printk("### cow_tmp: %s\n", cow_tmp);
+						
+						//copy the original file to temporal file
+						origin_fd = __do_sys_open(dfd, NULL, tmp, O_RDONLY, mode);
+						cow_fd = __do_sys_open(dfd, NULL, cow_tmp, O_CREAT | O_WRONLY | O_TRUNC, mode);
+						sys_sendfile(cow_fd, origin_fd, NULL, (size_t) file_inode->i_size);
+						sys_close(origin_fd);
+						sys_close(cow_fd);
+
+						//If the hard link count == 2, which is going to be 1 after unlink, remove the cowcopy xattr of the file
+						//We put it here because removing xattr needs file dentry, which might be change after unlink
+						printk("### The hard link of the cow file is %d now.\n", file_inode->i_nlink);
+						if(file_inode->i_nlink <= 2){
+
+							//------------for debug---------------------------
+							if(file_inode->i_nlink != 2)
+								printk("### Weird things happend, the hardlink != 2!!!\n");
+							//------------end of debug------------------------
+
+							printk("### need remove the cowcopy xattr since the hard link <= 2\n");
+							res = remove_cowcopy_xattr(file_inode, file_dentry);
+							if(res != 0){
+								printk("### Failed when remove cowcopy xattr of the cow file. res = %d\n", res);
+								kfree(cow_tmp);
+								return -EINVAL;
+							}
+
+							
+						}
+
+						//unlink the orignal cow file
+						res = sys_unlink(filename);
+						if(res != 0){
+							printk("### Cannot unlink the cow file.The return number: %d\n", res);
+							kfree(cow_tmp);
 							return -ENOMEM;
 						}
-						if(file_inode->i_op->getxattr(file_dentry, "trusted.cowcopy", NULL, 0) < 0){
-							printk("### Successfully remove the cowcopy xattr of the file.\n");
-						}else{
-							printk("### Not successfully remove the cowcopy xattr of the file.\n");
-						}
-					}
+						printk("### Successfully unlink the cow file. The hard link of origin cow file becomes %d\n", file_inode->i_nlink);
+						
 
-					dput(file_dentry);
+						//release the dentry since it's out of date
+						dput(file_dentry);
 
-					res = my_rename(cow_tmp, tmp);
-					if(res != 0){
-						printk("### failed when rename the file.The return number: %d\n", res);
-						kfree(cow_tmp);
-						return -ENOMEM;
-					}
-					printk("### rename done. res:%d\n", res);
 
-					res = kern_path(tmp, LOOKUP_FOLLOW, &file_path);
-
-					file_dentry = file_path.dentry;
-					file_inode = file_dentry->d_inode;
-
-					//remove the cowcopy xattr if there is
-					//new_file_inode = new_dentry->d_inode;
-					if(file_inode->i_op->getxattr(file_dentry, "trusted.cowcopy", NULL, 0) >= 0){
-						printk("### The new file has cowcopy xattr of the file.\n");
-
-						res = file_inode->i_op->removexattr(file_dentry,"trusted.cowcopy");
+						//rename the tmporal file to the expected name 
+						res = my_rename(cow_tmp, tmp);
 						if(res != 0){
-							printk("### Cannot remove cowcopy xattr of the cow file. res = %d\n", res);
-							dput(file_dentry);
+							printk("### Failed when rename the file.The return number: %d\n", res);
+							kfree(cow_tmp);
 							return -ENOMEM;
 						}
-						if(file_inode->i_op->getxattr(file_dentry, "trusted.cowcopy", NULL, 0) < 0){
-							printk("### Successfully remove the cowcopy xattr of the file.\n");
-						}else{
-							printk("### Not successfully remove the cowcopy xattr of the file.\n");
-						}
-					}else{
-						printk("### The new file has no cowcopy xattr of the file.\n");
+						printk("### rename done. res:%d\n", res);
+
+						kfree(cow_tmp);
 					}
-					dput(file_dentry);
-					kfree(cow_tmp);
 				}
 			}
 		}
