@@ -36,6 +36,7 @@
 #include <linux/slab.h>
 
 //rename a file
+ /*
 int my_rename(const char* old_name, const char* new_name){
 	struct dentry *old_dir, *new_dir;
 	struct dentry *old_dentry, *new_dentry;
@@ -102,7 +103,7 @@ int my_rename(const char* old_name, const char* new_name){
 
 	return error;
 }
-
+*/
 //remove cowcopy xattr of the file if there is
 int remove_cowcopy_xattr(struct inode *file_inode, struct dentry *file_dentry){
 	if(file_inode->i_op->getxattr(file_dentry, "trusted.cowcopy", NULL, 0) >= 0){
@@ -1074,36 +1075,31 @@ long __do_sys_open(int dfd, const char __user *filename, const char *tmp, int fl
 	struct file *f;
 	//------ our parameters -------------
 	struct dentry *file_dentry = NULL;
-	struct path file_path;
+	struct path file_path, dest_path;
 	struct inode *file_inode = NULL;
-	int origin_fd, cow_fd;
+	struct inode *new_inode = NULL;
+	//int origin_fd, cow_fd;
 	int res;
 	
-
 	fd = get_unused_fd_flags(flags);
 	if (fd >= 0) {
-
+		// checks if the file is write access
 		if ((flags & O_WRONLY) == O_WRONLY || (flags & O_RDWR) == O_RDWR){
-
-			// get path to file
+			// if yes, get path to file
 			res = kern_path(tmp, LOOKUP_FOLLOW, &file_path);
 	 		if (res == 0) {
-
-	 			//printk("### The file is open in write mode. filename: %s\n", tmp);
-
+	 			// if we found a path, get dentry and inode (need them to check FS)
 				file_dentry = file_path.dentry;
 				file_inode = file_dentry->d_inode;
 				
-				//check if it's in ext4 FS, and check whether the cowcopy exist xattr if it is
+				//check if file is ext4 and if cowcopy xattr is set
 				if (strcmp(file_inode->i_sb->s_type->name,"ext4") == 0 &&
 				   file_inode->i_op->getxattr(file_dentry, "trusted.cowcopy", NULL, 0) >= 0){
 
 					printk("### The file is in ext4 FS, and it has cowcopy xattr. \n\tfilename: %s\n", tmp);
-				
-
+					// check # of hard links
 				   	if(file_inode->i_nlink <= 1){
-				   		//If this happend, it's because there has been cow files being deleted
-				   		//We only remove the cowcopy xattr here
+				   		//If only one hard link, we can remove cow xattr
 				   		printk("### The file has cowcopy xattr but only one hardlink\n");
 
 				   		//remove the file's cowcopy xattr
@@ -1112,18 +1108,95 @@ long __do_sys_open(int dfd, const char __user *filename, const char *tmp, int fl
 							printk("### Failed when remove file's cowcopy xattr. res = %d\n", res);
 							return -EINVAL;
 						}
-
 				   	}else{
+				   		// more than 1 hard link, need to copy file
+				   		struct page *src, *dest;
+				   		struct writeback_control wbc = {
+							.sync_mode = WB_SYNC_NONE,
+							.nr_to_write = 1,
+							.range_start = 0,
+							.range_end = LLONG_MAX,
+							.for_reclaim = 1
+						};
+						//unlink the orignal cow file
+						res = sys_unlink(filename);
+						if(res != 0){
+							printk("### Cannot unlink the cow file.The return number: %d\n", res);
+							return -ENOMEM;
+						}
+						dput(file_dentry);
+						printk("### Successfully unlink. The # of hard link of origin cow file becomes %d\n", file_inode->i_nlink);
+						
+						// create a new inode
+						res = sys_mknodat(AT_FDCWD, filename, file_inode->i_mode, file_inode->i_rdev);
+						printk("sys_mknodat returned %d\n", res);
+							
+						res = kern_path(tmp, LOOKUP_FOLLOW, &dest_path);
+						if (res != 0){
+							printk("kern_path error %d\n", res);
+						}
+						printk("kern_path returned: %d\n", res);
 
-						char *cow_tmp = (char*) kmalloc(strlen(tmp)+2, GFP_KERNEL);
+						new_inode = dest_path.dentry->d_inode;
+						printk("got inode\n");
 						
+						spin_lock(&(new_inode->i_lock));
+						spin_lock(&(file_inode->i_lock));
 
+						// get a page from the original inode
+						src = find_or_create_page(file_inode->i_mapping, 0, GFP_KERNEL);
+						printk("number of pages old: %d\n", (int) file_inode->i_mapping->nrpages);
+											
 						
-						//create a temporal file name with '~'' in the end
-						strcpy(cow_tmp, tmp);
-						strcat(cow_tmp, "~");
-						//printk("### cow_tmp: %s\n", cow_tmp);
+						// alloc a page to new file
+						dest = page_cache_alloc_cold(new_inode->i_mapping);
+						printk("number of pages new: %d\n", (int) new_inode->i_mapping->nrpages);
+						res = add_to_page_cache_lru(dest, new_inode->i_mapping, 0, GFP_KERNEL);
+						printk("number of pages new: %d\n", (int) new_inode->i_mapping->nrpages);
+
+
+						// file_inode->i_mapping->a_ops->migratepage(new_inode->i_mapping, dest, src, 2);
+						// printk("migrate\n");
+						// get_page(dest);
+						// printk("getpage\n");
+						// new_inode->i_mapping->a_ops->set_page_dirty(dest);
+						// printk("set_page_dirty\n");
+						// put_page(dest);
+						// printk("putpage\n");
+						printk("%d\n", (int)PAGE_SIZE);
+						res = memcmp(kmap(dest), kmap(src), PAGE_SIZE);
+						printk("res: %d\n", res);						
+						memcpy(kmap(dest), kmap(src), PAGE_SIZE);
+						res = memcmp(kmap(dest), kmap(src), PAGE_SIZE);
+						printk("res: %d\n", res);
+						kunmap(dest);
+						kunmap(src);
+						// SetPageDirty(dest);
+						// if (PageDirty(dest)){
+						// 	printk("page is dirty!\n");
+						// }
+						// else{
+						// 	printk("page not dirty :(\n");
+						// }
+
+						SetPageUptodate(dest);
+						SetPageDirty(dest);
+						new_inode->i_size = file_inode->i_size;
+						new_inode->i_mapping->a_ops->writepages(new_inode->i_mapping,&wbc);
+						printk("new_inode: %lu, page ino: %lu, size: %lld\n", new_inode->i_ino, dest->mapping->host->i_ino, new_inode->i_size);
+						spin_unlock(&(new_inode->i_lock));
+						spin_unlock(&(file_inode->i_lock));
+						unlock_page(src);	
+						unlock_page(dest);
+						//printk("writepage returned %d\n", res);
+						//sys_sync();
 						
+						// get_page(dest);
+						// printk("getpage\n");
+						// new_inode->i_mapping->a_ops->set_page_dirty(dest);
+						// put_page(dest);
+						// printk("putpage\n");
+						/*
 						//copy the original file to temporal file
 						origin_fd = __do_sys_open(dfd, NULL, tmp, O_RDONLY, mode);
 						if(origin_fd < 0){
@@ -1139,17 +1212,17 @@ long __do_sys_open(int dfd, const char __user *filename, const char *tmp, int fl
 						}
 						sys_close(origin_fd);
 						sys_close(cow_fd);
+						*/
 
 						//If the hard link count == 2, which is going to be 1 after unlink, remove the cowcopy xattr of the file
-						//We put it here because removing xattr needs file dentry, which might be change after unlink
+						//We put it here because removing xattr needs file dentry, which might be changed after unlink
+						/*
 						printk("### The hard link of the cow file is %d now.\n", file_inode->i_nlink);
 						if(file_inode->i_nlink <= 2){
-
 							//------------for debug---------------------------
 							if(file_inode->i_nlink != 2)
 								printk("### Weird things happend, the hardlink != 2!!!\n");
 							//------------end of debug------------------------
-
 							printk("### need remove the cowcopy xattr since the hard link <= 2\n");
 							res = remove_cowcopy_xattr(file_inode, file_dentry);
 							if(res != 0){
@@ -1157,8 +1230,6 @@ long __do_sys_open(int dfd, const char __user *filename, const char *tmp, int fl
 								kfree(cow_tmp);
 								return -EINVAL;
 							}
-
-							
 						}
 
 						//unlink the orignal cow file
@@ -1174,7 +1245,6 @@ long __do_sys_open(int dfd, const char __user *filename, const char *tmp, int fl
 						//release the dentry since it's out of date
 						dput(file_dentry);
 
-
 						//rename the tmporal file to the expected name 
 						res = my_rename(cow_tmp, tmp);
 						if(res != 0){
@@ -1183,8 +1253,8 @@ long __do_sys_open(int dfd, const char __user *filename, const char *tmp, int fl
 							return -ENOMEM;
 						}
 						printk("### rename done. res:%d\n", res);
-
-						kfree(cow_tmp);
+						*/
+						//kfree(cow_tmp);
 					}
 				}
 			}
